@@ -39,6 +39,8 @@ type EditPublicationForm = {
 };
 
 const weekdays = ["SEG", "TER", "QUA", "QUI", "SEX", "SÁB", "DOM"];
+const visualPresentationsBucket = "visual-presentations";
+const legacyPresentationAssetsBucket = "presentation-assets";
 
 const publicationTypes: Array<{
   format: VisualFormat;
@@ -67,6 +69,29 @@ function safeStorageFileName(fileName: string) {
   const safeName = name.replace(/[^a-zA-Z0-9._-]/g, "-");
 
   return safeName || "image";
+}
+
+function visualPresentationStoragePath({
+  clientId,
+  presentationId,
+  itemId,
+  fileName,
+  index,
+}: {
+  clientId: string;
+  presentationId: string;
+  itemId: string;
+  fileName: string;
+  index: number;
+}) {
+  return [
+    "clients",
+    clientId,
+    "presentations",
+    presentationId,
+    itemId,
+    `${Date.now()}-${index}-${safeStorageFileName(fileName)}`,
+  ].join("/");
 }
 
 function publicationLabel(format: VisualFormat) {
@@ -264,7 +289,7 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
     await supabase.from("visual_items").delete().eq("id", itemId);
 
     if (imagePaths.length) {
-      await supabase.storage.from("presentation-assets").remove(imagePaths);
+      await supabase.storage.from(visualPresentationsBucket).remove(imagePaths);
     }
   }
 
@@ -329,12 +354,16 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
 
     for (let index = 0; index < form.imageFiles.length; index += 1) {
       const file = form.imageFiles[index];
-      const imagePath = `${presentation.id}/${itemData.id}/${Date.now()}-${index}-${safeStorageFileName(
-        file.name,
-      )}`;
+      const imagePath = visualPresentationStoragePath({
+        clientId: presentation.client_id,
+        presentationId: presentation.id,
+        itemId: itemData.id,
+        fileName: file.name,
+        index,
+      });
 
       const { error: uploadError } = await supabase.storage
-        .from("presentation-assets")
+        .from(visualPresentationsBucket)
         .upload(imagePath, file, {
           contentType: file.type || undefined,
           upsert: false,
@@ -351,7 +380,14 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
 
       const {
         data: { publicUrl },
-      } = supabase.storage.from("presentation-assets").getPublicUrl(imagePath);
+      } = supabase.storage.from(visualPresentationsBucket).getPublicUrl(imagePath);
+
+      if (!publicUrl) {
+        await cleanupFailedPublication(itemData.id, uploadedPaths);
+        setError("Nao foi possivel gerar a URL publica da imagem.");
+        setSaving(false);
+        return;
+      }
 
       uploadedRows.push({
         visual_item_id: itemData.id,
@@ -370,6 +406,18 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
       setError(imageInsertError.message);
       setSaving(false);
       return;
+    }
+
+    const firstUploadedImage = uploadedRows[0];
+
+    if (firstUploadedImage) {
+      await supabase
+        .from("visual_items")
+        .update({
+          image_url: firstUploadedImage.image_url,
+          image_path: firstUploadedImage.image_path,
+        })
+        .eq("id", itemData.id);
     }
 
     setForm(initialPublicationForm(form.format));
@@ -446,7 +494,10 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
     }
 
     if (storagePaths.length) {
-      await supabase.storage.from("presentation-assets").remove(storagePaths);
+      await Promise.all([
+        supabase.storage.from(visualPresentationsBucket).remove(storagePaths),
+        supabase.storage.from(legacyPresentationAssetsBucket).remove(storagePaths),
+      ]);
     }
 
     await loadPresentation();

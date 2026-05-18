@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, ImageIcon, Pencil, Trash2 } from "lucide-rea
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { supabase } from "@/lib/supabase/client";
 import type { Client, VisualItem, VisualItemImage } from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
 
@@ -28,8 +29,133 @@ type VisualItemBoardProps = {
 type ArtworkImage = {
   id: string;
   image_url: string | null;
+  image_path: string | null;
   label: string | null;
 };
+
+const visualPresentationsBucket = "visual-presentations";
+const legacyPresentationAssetsBucket = "presentation-assets";
+const readablePresentationBuckets = [visualPresentationsBucket, legacyPresentationAssetsBucket];
+
+function readStringValue(source: unknown, key: string) {
+  if (!source || typeof source !== "object") return null;
+
+  const value = (source as Record<string, unknown>)[key];
+
+  return typeof value === "string" ? value.trim() : null;
+}
+
+function publicUrlFromStoragePath(path: string | null, bucket = visualPresentationsBucket) {
+  if (!path) return null;
+
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from(bucket).getPublicUrl(path);
+
+  return publicUrl || null;
+}
+
+function stripStoragePath(value: string | null) {
+  if (!value) return null;
+
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue || /^(blob:|file:|data:)/i.test(trimmedValue)) {
+    return null;
+  }
+
+  try {
+    const parsedUrl = new URL(trimmedValue);
+    const storageMatch = readablePresentationBuckets
+      .map((bucket) => ({
+        bucket,
+        marker: [
+          `/storage/v1/object/public/${bucket}/`,
+          `/storage/v1/object/sign/${bucket}/`,
+          `/storage/v1/object/authenticated/${bucket}/`,
+        ].find((currentMarker) => parsedUrl.pathname.includes(currentMarker)),
+      }))
+      .find((entry) => entry.marker);
+
+    if (!storageMatch?.marker) return null;
+
+    const [, rawPath = ""] = parsedUrl.pathname.split(storageMatch.marker);
+    const path = decodeURIComponent(rawPath).replace(/^\/+/, "");
+
+    return path ? { bucket: storageMatch.bucket, path } : null;
+  } catch {
+    let normalizedPath = trimmedValue.replace(/^\/+/, "").split("?")[0];
+    let bucket = normalizedPath.startsWith(`${legacyPresentationAssetsBucket}/`)
+      ? legacyPresentationAssetsBucket
+      : visualPresentationsBucket;
+
+    readablePresentationBuckets.forEach((currentBucket) => {
+      [
+        `storage/v1/object/public/${currentBucket}/`,
+        `storage/v1/object/sign/${currentBucket}/`,
+        `storage/v1/object/authenticated/${currentBucket}/`,
+        `object/public/${currentBucket}/`,
+        `object/sign/${currentBucket}/`,
+        `object/authenticated/${currentBucket}/`,
+        `public/${currentBucket}/`,
+        `${currentBucket}/`,
+      ].forEach((prefix) => {
+        if (normalizedPath.startsWith(prefix)) {
+          normalizedPath = normalizedPath.slice(prefix.length);
+          bucket = currentBucket;
+        }
+      });
+    });
+
+    if (!normalizedPath.startsWith("clients/") && !normalizedPath.startsWith("temp/")) {
+      bucket = legacyPresentationAssetsBucket;
+    }
+
+    if (!normalizedPath || normalizedPath.includes("://")) return null;
+
+    return { bucket, path: normalizedPath };
+  }
+}
+
+function normalizeImageSource(source: unknown) {
+  const urlValue =
+    readStringValue(source, "image_url") ||
+    readStringValue(source, "imageUrl") ||
+    readStringValue(source, "url") ||
+    readStringValue(source, "src");
+  const pathValue =
+    readStringValue(source, "image_path") ||
+    readStringValue(source, "imagePath") ||
+    readStringValue(source, "storage_path") ||
+    readStringValue(source, "path");
+  const storagePath = stripStoragePath(pathValue) || stripStoragePath(urlValue);
+
+  if (storagePath) {
+    return {
+      image_url: publicUrlFromStoragePath(storagePath.path, storagePath.bucket),
+      image_path: storagePath.path,
+    };
+  }
+
+  if (!urlValue || /^(blob:|file:|data:)/i.test(urlValue)) {
+    return {
+      image_url: null,
+      image_path: null,
+    };
+  }
+
+  if (/^https?:\/\//i.test(urlValue)) {
+    return {
+      image_url: urlValue,
+      image_path: null,
+    };
+  }
+
+  return {
+    image_url: null,
+    image_path: null,
+  };
+}
 
 function modeFromItem(item: VisualItem) {
   const format = `${item.format ?? ""}`.toLowerCase();
@@ -43,18 +169,32 @@ function modeFromItem(item: VisualItem) {
 function imagesFromItems(items: VisualItemWithImages[]) {
   return items.flatMap((item) => {
     if (item.images?.length) {
-      return item.images.map((image) => ({
-        id: image.id,
-        image_url: image.image_url,
-        label: item.label,
-      }));
+      const normalizedImages = item.images
+        .map((image) => {
+          const normalizedSource = normalizeImageSource(image);
+
+          return {
+            id: image.id,
+            image_url: normalizedSource.image_url,
+            image_path: normalizedSource.image_path,
+            label: item.label,
+          };
+        })
+        .filter((image) => Boolean(image.image_url));
+
+      if (normalizedImages.length) {
+        return normalizedImages;
+      }
     }
 
-    if (item.image_url) {
+    const normalizedSource = normalizeImageSource(item);
+
+    if (normalizedSource.image_url) {
       return [
         {
           id: item.id,
-          image_url: item.image_url,
+          image_url: normalizedSource.image_url,
+          image_path: normalizedSource.image_path,
           label: item.label,
         },
       ];
@@ -64,6 +204,7 @@ function imagesFromItems(items: VisualItemWithImages[]) {
       {
         id: item.id,
         image_url: null,
+        image_path: null,
         label: item.label,
       },
     ];
@@ -87,7 +228,24 @@ export function fullWeekday(value?: string | null) {
   return weekdays[normalizedValue] || value || "Dia nao definido";
 }
 
+function ImageFallback() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-xs font-medium text-muted-foreground">
+      <ImageIcon className="h-8 w-8 opacity-70" />
+      <span>Imagem não carregada</span>
+    </div>
+  );
+}
+
 function ImageFrame({ image, className }: { image: ArtworkImage; className?: string }) {
+  const [hasImageError, setHasImageError] = useState(false);
+
+  useEffect(() => {
+    setHasImageError(false);
+  }, [image.image_url]);
+
+  const canRenderImage = Boolean(image.image_url && !hasImageError);
+
   return (
     <div
       className={cn(
@@ -95,19 +253,19 @@ function ImageFrame({ image, className }: { image: ArtworkImage; className?: str
         className,
       )}
     >
-      {image.image_url ? (
+      {canRenderImage ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={image.image_url}
+          src={image.image_url ?? ""}
           alt={image.label ?? ""}
           draggable={false}
+          decoding="async"
+          onError={() => setHasImageError(true)}
           onDragStart={(event) => event.preventDefault()}
-          className="pointer-events-none h-full w-full select-none object-contain [-webkit-user-drag:none]"
+          className="pointer-events-none h-full w-full select-none object-contain object-center [-webkit-user-drag:none]"
         />
       ) : (
-        <div className="flex h-full items-center justify-center text-neutral-400">
-          <ImageIcon className="h-10 w-10" />
-        </div>
+        <ImageFallback />
       )}
     </div>
   );
@@ -224,14 +382,14 @@ function ArtworkViewer({
   const frameClass =
     mode === "stories"
       ? isPublic
-        ? "mx-auto aspect-[9/16] w-full max-w-[min(70vw,340px)] rounded-xl"
+        ? "mx-auto aspect-[9/16] h-[min(75vh,640px)] max-w-full rounded-xl"
         : "mx-auto aspect-[9/16] w-full max-w-[220px] rounded-lg"
       : mode === "carousel"
         ? isPublic
-          ? "mx-auto aspect-[4/5] w-full max-w-[min(76vw,460px)] rounded-xl"
+          ? "mx-auto aspect-[4/5] h-[min(75vh,620px)] max-w-full rounded-xl"
           : "mx-auto aspect-[4/5] w-full max-w-[320px] rounded-lg"
         : isPublic
-          ? "mx-auto aspect-[4/5] w-full max-w-[min(76vw,460px)] rounded-xl"
+          ? "mx-auto aspect-square h-[min(70vh,560px)] max-w-full rounded-xl"
           : "mx-auto aspect-[4/5] w-full max-w-[330px] rounded-lg";
   const trackTransform = `translate3d(calc(${-activeIndex * 100}% + ${dragOffset}px), 0, 0)`;
 
@@ -252,7 +410,9 @@ function ArtworkViewer({
         onLostPointerCapture={stopDragging}
         className={cn(
           frameClass,
-          "overflow-hidden border border-black/5 bg-black/[0.035] shadow-sm touch-pan-y select-none dark:border-white/10 dark:bg-white/[0.035]",
+          isPublic
+            ? "overflow-hidden border border-transparent bg-transparent touch-pan-y select-none"
+            : "overflow-hidden border border-black/5 bg-black/[0.035] shadow-sm touch-pan-y select-none dark:border-white/10 dark:bg-white/[0.035]",
           images.length > 1 && (isDragging ? "cursor-grabbing" : "cursor-grab"),
         )}
       >
