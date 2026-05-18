@@ -31,6 +31,7 @@ import {
   getMonthNameFromDayMonth,
   isValidDayMonth,
 } from "@/lib/date-mask";
+import { optimizeImage } from "@/lib/image-optimizer";
 import { supabase } from "@/lib/supabase/client";
 import type { Client, CopyPlanning, VisualPresentation } from "@/lib/supabase/types";
 import { cn, formatDateBR } from "@/lib/utils";
@@ -950,11 +951,12 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
     setUploadingClientLogo(true);
     setProfileError(null);
 
-    const imagePath = `${client.id}/${Date.now()}-${safeStorageFileName(file.name)}`;
+    const optimizedLogoFile = await optimizeImage(file, "client-logo");
+    const imagePath = `${client.id}/${Date.now()}-${safeStorageFileName(optimizedLogoFile.name)}`;
     const { error: uploadError } = await supabase.storage
       .from("client-logos")
-      .upload(imagePath, file, {
-        contentType: file.type || undefined,
+      .upload(imagePath, optimizedLogoFile, {
+        contentType: optimizedLogoFile.type || undefined,
         upsert: false,
       });
 

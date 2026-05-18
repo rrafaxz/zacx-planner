@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { optimizeImage } from "@/lib/image-optimizer";
 import { supabase } from "@/lib/supabase/client";
 import type { Client } from "@/lib/supabase/types";
 
@@ -145,11 +146,12 @@ export function ClientsManager() {
 
     setUploadingLogo(true);
 
-    const imagePath = `${slug}/${Date.now()}-${safeStorageFileName(logoFile.name)}`;
+    const optimizedLogoFile = await optimizeImage(logoFile, "client-logo");
+    const imagePath = `${slug}/${Date.now()}-${safeStorageFileName(optimizedLogoFile.name)}`;
     const { error: uploadError } = await supabase.storage
       .from("client-logos")
-      .upload(imagePath, logoFile, {
-        contentType: logoFile.type || undefined,
+      .upload(imagePath, optimizedLogoFile, {
+        contentType: optimizedLogoFile.type || undefined,
         upsert: false,
       });
 

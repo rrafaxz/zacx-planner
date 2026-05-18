@@ -14,6 +14,7 @@ import {
 } from "@/components/visual-presentations/visual-item-board";
 import { useTheme } from "@/components/theme/theme-provider";
 import { formatDateInput, getDayMonthInputError } from "@/lib/date-mask";
+import { optimizeImage } from "@/lib/image-optimizer";
 import { supabase } from "@/lib/supabase/client";
 import type { Client, VisualItemImage, VisualPresentation } from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
@@ -354,18 +355,19 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
 
     for (let index = 0; index < form.imageFiles.length; index += 1) {
       const file = form.imageFiles[index];
+      const optimizedFile = await optimizeImage(file, form.format);
       const imagePath = visualPresentationStoragePath({
         clientId: presentation.client_id,
         presentationId: presentation.id,
         itemId: itemData.id,
-        fileName: file.name,
+        fileName: optimizedFile.name,
         index,
       });
 
       const { error: uploadError } = await supabase.storage
         .from(visualPresentationsBucket)
-        .upload(imagePath, file, {
-          contentType: file.type || undefined,
+        .upload(imagePath, optimizedFile, {
+          contentType: optimizedFile.type || undefined,
           upsert: false,
         });
 
