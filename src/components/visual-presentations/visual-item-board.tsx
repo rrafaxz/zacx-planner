@@ -1,6 +1,6 @@
 "use client";
 
-import { type PointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, ImageIcon, Pencil, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -237,7 +237,15 @@ function ImageFallback() {
   );
 }
 
-function ImageFrame({ image, className }: { image: ArtworkImage; className?: string }) {
+function ImageFrame({
+  image,
+  className,
+  priority = false,
+}: {
+  image: ArtworkImage;
+  className?: string;
+  priority?: boolean;
+}) {
   const [hasImageError, setHasImageError] = useState(false);
 
   useEffect(() => {
@@ -249,7 +257,7 @@ function ImageFrame({ image, className }: { image: ArtworkImage; className?: str
   return (
     <div
       className={cn(
-        "overflow-hidden border border-black/5 bg-black/[0.035] shadow-sm select-none dark:border-white/10 dark:bg-white/[0.035]",
+        "relative grid h-full w-full place-items-center overflow-hidden border border-black/5 bg-black/[0.035] shadow-sm select-none dark:border-white/10 dark:bg-white/[0.035]",
         className,
       )}
     >
@@ -260,9 +268,16 @@ function ImageFrame({ image, className }: { image: ArtworkImage; className?: str
           alt={image.label ?? ""}
           draggable={false}
           decoding="async"
-          onError={() => setHasImageError(true)}
+          loading={priority ? "eager" : "lazy"}
+          fetchPriority={priority ? "high" : "auto"}
+          onError={() => {
+            if (process.env.NODE_ENV !== "production") {
+              console.warn("Erro ao carregar imagem da apresentação visual", image.image_url);
+            }
+            setHasImageError(true);
+          }}
           onDragStart={(event) => event.preventDefault()}
-          className="pointer-events-none h-full w-full select-none object-contain object-center [-webkit-user-drag:none]"
+          className="pointer-events-none absolute inset-0 block h-full w-full select-none object-contain object-center [-webkit-user-drag:none]"
         />
       ) : (
         <ImageFallback />
@@ -379,18 +394,31 @@ function ArtworkViewer({
   }
 
   const isPublic = variant === "public";
+  const frameShapeClass = mode === "stories" ? "aspect-[9/16]" : "aspect-[4/5]";
+  const frameStyle: CSSProperties = {
+    width:
+      mode === "stories"
+        ? isPublic
+          ? "min(100%, 42.1875vh, 420px)"
+          : "min(100%, 220px)"
+        : isPublic
+          ? "min(100%, 60vh, 520px)"
+          : mode === "carousel"
+            ? "min(100%, 320px)"
+            : "min(100%, 330px)",
+  };
   const frameClass =
     mode === "stories"
       ? isPublic
-        ? "mx-auto aspect-[9/16] h-[min(75vh,640px)] max-w-full rounded-xl"
-        : "mx-auto aspect-[9/16] w-full max-w-[220px] rounded-lg"
+        ? "mx-auto rounded-xl"
+        : "mx-auto rounded-lg"
       : mode === "carousel"
         ? isPublic
-          ? "mx-auto aspect-[4/5] h-[min(75vh,620px)] max-w-full rounded-xl"
-          : "mx-auto aspect-[4/5] w-full max-w-[320px] rounded-lg"
+          ? "mx-auto rounded-xl"
+          : "mx-auto rounded-lg"
         : isPublic
-          ? "mx-auto aspect-square h-[min(70vh,560px)] max-w-full rounded-xl"
-          : "mx-auto aspect-[4/5] w-full max-w-[330px] rounded-lg";
+          ? "mx-auto rounded-xl"
+          : "mx-auto rounded-lg";
   const trackTransform = `translate3d(calc(${-activeIndex * 100}% + ${dragOffset}px), 0, 0)`;
 
   return (
@@ -402,13 +430,16 @@ function ArtworkViewer({
       )}
     >
       <div
+        data-artwork-frame
         ref={viewportRef}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={stopDragging}
         onPointerCancel={stopDragging}
         onLostPointerCapture={stopDragging}
+        style={frameStyle}
         className={cn(
+          frameShapeClass,
           frameClass,
           isPublic
             ? "overflow-hidden border border-transparent bg-transparent touch-pan-y select-none"
@@ -424,9 +455,10 @@ function ArtworkViewer({
           style={{ transform: trackTransform }}
         >
           {images.map((image) => (
-            <div key={image.id} className="h-full min-w-full shrink-0 select-none">
+            <div key={image.id} className="h-full min-w-0 basis-full flex-none select-none">
               <ImageFrame
                 image={image}
+                priority={image.id === images[activeIndex]?.id}
                 className="h-full w-full rounded-none border-0 bg-transparent shadow-none"
               />
             </div>
