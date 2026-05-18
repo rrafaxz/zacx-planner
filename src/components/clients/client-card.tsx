@@ -13,11 +13,10 @@ export function ClientCard({ client }: ClientCardProps) {
 
   return (
     <Link href={`/admin/clientes/${client.id}`} className="block h-full">
-      <Card className="group h-full overflow-hidden bg-background shadow-none transition hover:-translate-y-0.5 hover:border-foreground/20">
-        <div className="h-1.5" style={{ backgroundColor: accentColor }} />
-        <CardContent className="flex min-h-[164px] flex-col items-center justify-center p-3 text-center sm:min-h-[220px] sm:p-5">
+      <Card className="group h-full bg-background shadow-none transition hover:-translate-y-0.5 hover:border-foreground/20">
+        <CardContent className="flex min-h-[86px] items-center gap-3 p-3 sm:min-h-[104px] sm:p-4">
           <div
-            className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-full border border-border bg-secondary text-lg font-medium transition group-hover:scale-[1.03] sm:h-20 sm:w-20 sm:text-2xl"
+            className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full border border-border bg-background text-base font-medium transition group-hover:scale-[1.03] sm:h-14 sm:w-14 sm:text-lg"
             style={{ color: accentColor }}
           >
             {client.logo_url ? (
@@ -28,14 +27,14 @@ export function ClientCard({ client }: ClientCardProps) {
             )}
           </div>
 
-          <h2 className="sora-heading mt-3 line-clamp-2 text-sm font-medium leading-snug text-foreground sm:mt-4 sm:text-lg">
-            {client.name}
-          </h2>
-          <p className="mt-1 max-w-full truncate text-xs text-muted-foreground sm:text-sm">/{client.slug}</p>
-
-          <div className="mt-3 flex items-center gap-1.5 sm:mt-5 sm:gap-2">
-            <span className="h-2.5 w-2.5 rounded-full sm:h-3 sm:w-3" style={{ backgroundColor: accentColor }} />
-            <span className="h-2.5 w-2.5 rounded-full sm:h-3 sm:w-3" style={{ backgroundColor: secondaryColor }} />
+          <div className="min-w-0 flex-1">
+            <h2 className="sora-heading line-clamp-2 text-sm font-medium leading-snug text-foreground sm:text-base">
+              {client.name}
+            </h2>
+            <div className="mt-2 flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: accentColor }} />
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: secondaryColor }} />
+            </div>
           </div>
         </CardContent>
       </Card>

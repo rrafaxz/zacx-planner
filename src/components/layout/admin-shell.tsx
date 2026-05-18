@@ -8,12 +8,15 @@ import {
   ChevronLeft,
   ChevronRight,
   Menu,
+  Moon,
+  Sun,
   UsersRound,
   X,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { PwaInstallButton } from "@/components/pwa-install-button";
+import { useTheme } from "@/components/theme/theme-provider";
 import { ZacxLogo } from "@/components/zacx-logo";
 import { ZacxMark } from "@/components/zacx-mark";
 import { cn } from "@/lib/utils";
@@ -22,6 +25,28 @@ const navItems = [
   { href: "/admin", label: "Visao geral", icon: BarChart3 },
   { href: "/admin/clientes", label: "Clientes", icon: UsersRound },
 ];
+
+function ThemeMenuButton({ compact = false }: { compact?: boolean }) {
+  const { theme, toggleTheme } = useTheme();
+  const Icon = theme === "dark" ? Sun : Moon;
+  const label = theme === "dark" ? "Tema claro" : "Tema escuro";
+
+  return (
+    <button
+      type="button"
+      onClick={toggleTheme}
+      className={cn(
+        "flex h-11 items-center gap-3 rounded-md px-3 text-sm text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground",
+        compact && "justify-center px-0",
+      )}
+      title={compact ? label : undefined}
+      aria-label={label}
+    >
+      <Icon className="h-4 w-4 shrink-0" />
+      {!compact ? label : null}
+    </button>
+  );
+}
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -112,6 +137,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 })}
 
                 <PwaInstallButton />
+                <ThemeMenuButton />
               </nav>
             </aside>
           </div>
@@ -201,6 +227,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             );
           })}
 
+          <ThemeMenuButton compact={isCollapsed} />
         </nav>
 
         <nav className="absolute bottom-5 left-4 right-4 grid gap-2">

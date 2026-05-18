@@ -558,14 +558,14 @@ export function WeekEditor({ weekId }: WeekEditorProps) {
 
         <TabsContent value="planning" className="space-y-5">
           {error ? (
-            <Card className="border-rose-500/30 bg-rose-500/10">
-              <CardContent className="pt-5 text-sm text-rose-100">{error}</CardContent>
+            <Card className="border-rose-600 bg-rose-600 text-white">
+              <CardContent className="pt-5 text-sm font-medium">{error}</CardContent>
             </Card>
           ) : null}
 
           {notice ? (
-            <Card className="border-emerald-500/30 bg-emerald-500/10">
-              <CardContent className="pt-5 text-sm text-emerald-100">{notice}</CardContent>
+            <Card className="border-emerald-600 bg-emerald-600 text-white">
+              <CardContent className="pt-5 text-sm font-medium">{notice}</CardContent>
             </Card>
           ) : null}
 
@@ -827,14 +827,14 @@ export function WeekEditor({ weekId }: WeekEditorProps) {
 
         <TabsContent value="presentation" className="space-y-6">
           {error ? (
-            <Card className="border-rose-500/30 bg-rose-500/10">
-              <CardContent className="pt-5 text-sm text-rose-100">{error}</CardContent>
+            <Card className="border-rose-600 bg-rose-600 text-white">
+              <CardContent className="pt-5 text-sm font-medium">{error}</CardContent>
             </Card>
           ) : null}
 
           {notice ? (
-            <Card className="border-emerald-500/30 bg-emerald-500/10">
-              <CardContent className="pt-5 text-sm text-emerald-100">{notice}</CardContent>
+            <Card className="border-emerald-600 bg-emerald-600 text-white">
+              <CardContent className="pt-5 text-sm font-medium">{notice}</CardContent>
             </Card>
           ) : null}
 

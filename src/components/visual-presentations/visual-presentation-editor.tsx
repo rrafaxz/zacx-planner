@@ -6,12 +6,14 @@ import Link from "next/link";
 import {
   Archive,
   ArrowLeft,
+  CheckSquare2,
   Clipboard,
   ExternalLink,
   ImageIcon,
   ImagePlus,
   Info,
   Plus,
+  Square,
   Trash2,
   Upload,
   X,
@@ -608,6 +610,9 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
   const [editFileInputKey, setEditFileInputKey] = useState(0);
   const [editorMode, setEditorMode] = useState<EditorMode>("edit");
   const [selectedWeekId, setSelectedWeekId] = useState<string | null>(null);
+  const [itemSelectionMode, setItemSelectionMode] = useState(false);
+  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
+  const [bulkDeletingItems, setBulkDeletingItems] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const itemsUndoStackRef = useRef<VisualItemWithImages[][]>([]);
@@ -690,6 +695,11 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
         : presentationWeeks[0].id,
     );
   }, [presentationWeeks]);
+
+  useEffect(() => {
+    setItemSelectionMode(false);
+    setSelectedItemIds([]);
+  }, [selectedWeekId, editorMode]);
 
   async function loadPresentation() {
     setLoading(true);
@@ -1441,6 +1451,71 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
     setDeletingItemId(null);
   }
 
+  function toggleSelectedItem(id: string) {
+    setSelectedItemIds((current) =>
+      current.includes(id)
+        ? current.filter((selectedId) => selectedId !== id)
+        : [...current, id],
+    );
+  }
+
+  async function deleteSelectedItems() {
+    if (!selectedItemIds.length) return;
+
+    const confirmed = window.confirm(
+      `Excluir ${selectedItemIds.length} publicacao${selectedItemIds.length === 1 ? "" : "es"} visual${selectedItemIds.length === 1 ? "" : "is"}?`,
+    );
+
+    if (!confirmed) return;
+
+    const selectedItems = items.filter((item) => selectedItemIds.includes(item.id));
+    const storagePaths = selectedItems
+      .flatMap((item) => [
+        ...(item.images ?? []).map((image) => image.image_path),
+        item.image_path,
+      ])
+      .filter(Boolean) as string[];
+
+    setBulkDeletingItems(true);
+    setError(null);
+    setNotice(null);
+
+    const { error: deleteImagesError } = await supabase
+      .from("visual_item_images")
+      .delete()
+      .in("visual_item_id", selectedItemIds);
+
+    if (deleteImagesError) {
+      setError(deleteImagesError.message);
+      setBulkDeletingItems(false);
+      return;
+    }
+
+    const { error: deleteItemsError } = await supabase
+      .from("visual_items")
+      .delete()
+      .in("id", selectedItemIds);
+
+    if (deleteItemsError) {
+      setError(deleteItemsError.message);
+      setBulkDeletingItems(false);
+      return;
+    }
+
+    if (storagePaths.length) {
+      await Promise.all([
+        supabase.storage.from(visualPresentationsBucket).remove(storagePaths),
+        supabase.storage.from(legacyPresentationAssetsBucket).remove(storagePaths),
+      ]);
+    }
+
+    setItemSelectionMode(false);
+    setSelectedItemIds([]);
+    await loadPresentation();
+    setNotice("Publicacoes excluidas.");
+    setBulkDeletingItems(false);
+  }
+
   async function archivePresentation() {
     if (!presentation) return;
 
@@ -2083,14 +2158,14 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
       </div>
 
       {error && !activeFormat ? (
-        <Card className="border-rose-500/30 bg-rose-500/10">
-          <CardContent className="pt-5 text-sm text-rose-100">{error}</CardContent>
+        <Card className="relative z-[60] border-rose-600 bg-rose-600 text-white">
+          <CardContent className="pt-5 text-sm font-medium">{error}</CardContent>
         </Card>
       ) : null}
 
       {notice ? (
-        <Card className="border-emerald-500/30 bg-emerald-500/10">
-          <CardContent className="pt-5 text-sm text-emerald-100">{notice}</CardContent>
+        <Card className="relative z-[60] border-emerald-600 bg-emerald-600 text-white">
+          <CardContent className="pt-5 text-sm font-medium">{notice}</CardContent>
         </Card>
       ) : null}
 
@@ -2641,26 +2716,92 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
       ) : null}
 
       {editorMode === "edit" ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
+          <Button
+            type="button"
+            variant="ghostSecondary"
+            size="sm"
+            onClick={() => {
+              setItemSelectionMode((current) => !current);
+              setSelectedItemIds([]);
+            }}
+          >
+            <CheckSquare2 className="h-3.5 w-3.5" />
+            Selecionar
+          </Button>
+          {itemSelectionMode ? (
+            <>
+              <span className="mr-auto font-medium text-foreground">
+                {selectedItemIds.length} selecionado{selectedItemIds.length === 1 ? "" : "s"}
+              </span>
+              {selectedItemIds.length ? (
+                <Button
+                  type="button"
+                  variant="ghostSecondary"
+                  size="sm"
+                  onClick={deleteSelectedItems}
+                  disabled={bulkDeletingItems}
+                  className="text-rose-500 hover:text-rose-500"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Excluir
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="ghostSecondary"
+                size="sm"
+                onClick={() => {
+                  setItemSelectionMode(false);
+                  setSelectedItemIds([]);
+                }}
+              >
+                Cancelar seleção
+              </Button>
+            </>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              Use para excluir várias publicações da semana.
+            </span>
+          )}
+        </div>
+      ) : null}
+
+      {editorMode === "edit" ? (
         selectedWeekItems.length ? (
         <div className="grid gap-5 lg:grid-cols-2 2xl:grid-cols-3">
           {selectedWeekItems.map((item) => {
             const fullItem = items.find((currentItem) => currentItem.id === item.id) ?? item;
+            const isSelected = selectedItemIds.includes(item.id);
 
             return (
             <div
               key={item.id}
               data-visual-item-card
-              draggable={!reorderingItemId}
+              draggable={!reorderingItemId && !itemSelectionMode}
               onDragStart={(event) => handleVisualItemDragStart(event, fullItem)}
               onDragOver={(event) => handleVisualItemDragOver(event, fullItem)}
               onDrop={dropVisualItem}
               onDragEnd={cancelVisualItemDrag}
               className={cn(
-                "cursor-grab transition-transform duration-150 ease-out active:cursor-grabbing",
+                "relative transition-transform duration-150 ease-out",
+                itemSelectionMode ? "cursor-default" : "cursor-grab active:cursor-grabbing",
+                isSelected && "rounded-2xl ring-1 ring-[var(--zacx-brand)]",
                 visualItemDrag?.itemId === item.id && "scale-[1.01] shadow-sm shadow-black/10",
                 reorderingItemId === item.id && "opacity-75",
               )}
             >
+              {itemSelectionMode ? (
+                <button
+                  type="button"
+                  className="absolute left-3 top-3 z-20 grid h-8 w-8 place-items-center rounded-md border border-border bg-background text-foreground"
+                  onClick={() => toggleSelectedItem(item.id)}
+                  aria-label={isSelected ? "Remover da seleção" : "Selecionar publicação"}
+                  title={isSelected ? "Remover da seleção" : "Selecionar"}
+                >
+                  {isSelected ? <CheckSquare2 className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                </button>
+              ) : null}
               <VisualItemBoard
                 items={[item]}
                 client={client}
@@ -2669,7 +2810,7 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
                 deletingItemId={deletingItemId}
                 theme={theme}
                 onQuickUpdate={handleQuickUpdate}
-                showDragHandle
+                showDragHandle={!itemSelectionMode}
                 dragHandleProps={{
                   "aria-label": "Arrastar para reorganizar publicacao",
                   className: "pointer-events-none",

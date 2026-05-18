@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Loader2, Plus, X } from "lucide-react";
+import { Loader2, Plus, Search, X } from "lucide-react";
 
 import { ClientAvatarInput } from "@/components/clients/client-avatar-input";
 import { ClientCard } from "@/components/clients/client-card";
@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { optimizeImage } from "@/lib/image-optimizer";
 import { supabase } from "@/lib/supabase/client";
 import type { Client } from "@/lib/supabase/types";
+import { cn } from "@/lib/utils";
 
 const initialForm = {
   name: "",
@@ -60,6 +61,71 @@ function isImageFile(file: File) {
   return file.type.startsWith("image/");
 }
 
+function normalizedSearch(value?: string | null) {
+  return `${value ?? ""}`
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function InlineSearchControl({
+  isOpen,
+  value,
+  onOpenChange,
+  onValueChange,
+}: {
+  isOpen: boolean;
+  value: string;
+  onOpenChange: (open: boolean) => void;
+  onValueChange: (value: string) => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "relative flex h-10 items-center overflow-hidden rounded-lg border border-border bg-background text-muted-foreground transition-all duration-200 ease-out focus-within:border-neutral-400 dark:focus-within:border-white/35",
+        isOpen || value ? "w-[min(64vw,280px)]" : "w-10",
+      )}
+    >
+      <button
+        type="button"
+        className="grid h-10 w-10 shrink-0 place-items-center transition-colors hover:text-foreground"
+        onClick={() => onOpenChange(true)}
+        aria-label="Buscar clientes"
+        title="Buscar clientes"
+      >
+        <Search className="h-4 w-4" />
+      </button>
+      {isOpen || value ? (
+        <>
+          <Input
+            value={value}
+            onChange={(event) => onValueChange(event.target.value)}
+            onBlur={() => {
+              if (!value.trim()) onOpenChange(false);
+            }}
+            autoFocus
+            placeholder="Buscar cliente..."
+            className="h-10 min-w-0 flex-1 border-0 bg-transparent px-0 pr-8 text-sm text-foreground shadow-none focus-visible:ring-0"
+          />
+          {value ? (
+            <button
+              type="button"
+              className="absolute right-1.5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => onValueChange("")}
+              aria-label="Limpar busca"
+              title="Limpar busca"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 export function ClientsManager() {
   const [clients, setClients] = useState<Client[]>([]);
   const [form, setForm] = useState(initialForm);
@@ -71,6 +137,8 @@ export function ClientsManager() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [clientSearch, setClientSearch] = useState("");
+  const [isClientSearchOpen, setIsClientSearchOpen] = useState(false);
 
   async function loadClients() {
     setLoading(true);
@@ -106,6 +174,15 @@ export function ClientsManager() {
     () => uniqueSlug(slugify(form.name), clients),
     [clients, form.name],
   );
+  const filteredClients = useMemo(() => {
+    const search = normalizedSearch(clientSearch);
+
+    if (!search) return clients;
+
+    return clients.filter((client) =>
+      normalizedSearch(`${client.name} ${client.slug}`).includes(search),
+    );
+  }, [clientSearch, clients]);
 
   function openModal() {
     setForm(initialForm);
@@ -221,15 +298,23 @@ export function ClientsManager() {
             Perfis de clientes com planejamentos mensais e apresentacoes visuais separados.
           </p>
         </div>
-        <Button
-          id="novo-cliente"
-          type="button"
-          onClick={openModal}
-          className="hidden h-11 rounded-lg bg-[var(--zacx-brand)] px-5 text-sm font-medium text-white hover:opacity-90 dark:text-black md:inline-flex"
-        >
-          <Plus className="h-4 w-4" />
-          Adicionar cliente
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            id="novo-cliente"
+            type="button"
+            onClick={openModal}
+            className="hidden h-10 rounded-lg bg-[var(--zacx-brand)] px-4 text-sm font-medium text-white hover:opacity-90 dark:text-black md:inline-flex"
+          >
+            <Plus className="h-4 w-4" />
+            Adicionar cliente
+          </Button>
+          <InlineSearchControl
+            isOpen={isClientSearchOpen}
+            value={clientSearch}
+            onOpenChange={setIsClientSearchOpen}
+            onValueChange={setClientSearch}
+          />
+        </div>
         <button
           type="button"
           onClick={openModal}
@@ -242,14 +327,14 @@ export function ClientsManager() {
       </div>
 
       {success ? (
-        <Card className="border-emerald-500/30 bg-emerald-500/10">
-          <CardContent className="pt-5 text-sm text-emerald-100">{success}</CardContent>
+        <Card className="border-emerald-600 bg-emerald-600 text-white">
+          <CardContent className="pt-5 text-sm font-medium">{success}</CardContent>
         </Card>
       ) : null}
 
       {!modalOpen && error ? (
-        <Card className="border-rose-500/30 bg-rose-500/10">
-          <CardContent className="pt-5 text-sm text-rose-100">{error}</CardContent>
+        <Card className="border-rose-600 bg-rose-600 text-white">
+          <CardContent className="pt-5 text-sm font-medium">{error}</CardContent>
         </Card>
       ) : null}
 
@@ -260,16 +345,18 @@ export function ClientsManager() {
             Carregando clientes...
           </CardContent>
         </Card>
-      ) : clients.length ? (
+      ) : filteredClients.length ? (
         <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
-          {clients.map((client) => (
+          {filteredClients.map((client) => (
             <ClientCard key={client.id} client={client} />
           ))}
         </div>
       ) : (
         <Card className="border-dashed">
           <CardContent className="pt-5 text-sm text-muted-foreground">
-            Nenhum cliente cadastrado ainda. Crie o primeiro perfil para comecar.
+            {clientSearch
+              ? "Nenhum cliente encontrado com essa busca."
+              : "Nenhum cliente cadastrado ainda. Crie o primeiro perfil para comecar."}
           </CardContent>
         </Card>
       )}

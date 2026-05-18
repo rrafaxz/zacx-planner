@@ -5,15 +5,20 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  Archive,
   ArrowLeft,
+  CheckSquare2,
   Clipboard,
   ExternalLink,
   FileText,
   ImagePlus,
   Pencil,
   Plus,
+  RotateCcw,
   Search,
   SlidersHorizontal,
+  Square,
+  Trash2,
   X,
 } from "lucide-react";
 
@@ -416,6 +421,69 @@ function InfoTag({ children }: { children: string }) {
   );
 }
 
+function InlineSearchControl({
+  isOpen,
+  value,
+  placeholder,
+  label,
+  onOpenChange,
+  onValueChange,
+}: {
+  isOpen: boolean;
+  value: string;
+  placeholder: string;
+  label: string;
+  onOpenChange: (open: boolean) => void;
+  onValueChange: (value: string) => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "relative flex h-10 items-center overflow-hidden rounded-lg border border-border bg-background text-muted-foreground transition-all duration-200 ease-out focus-within:border-neutral-400 dark:focus-within:border-white/35",
+        isOpen || value ? "w-[min(58vw,260px)]" : "w-10",
+      )}
+    >
+      <button
+        type="button"
+        className="grid h-10 w-10 shrink-0 place-items-center transition-colors hover:text-foreground"
+        onClick={() => onOpenChange(true)}
+        aria-label={label}
+        title={label}
+      >
+        <Search className="h-4 w-4" />
+      </button>
+      {isOpen || value ? (
+        <>
+          <Input
+            value={value}
+            onChange={(event) => onValueChange(event.target.value)}
+            onBlur={() => {
+              if (!value.trim()) {
+                onOpenChange(false);
+              }
+            }}
+            autoFocus
+            placeholder={placeholder}
+            className="h-10 min-w-0 flex-1 border-0 bg-transparent px-0 pr-8 text-sm text-foreground shadow-none focus-visible:ring-0"
+          />
+          {value ? (
+            <button
+              type="button"
+              className="absolute right-1.5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => onValueChange("")}
+              aria-label="Limpar busca"
+              title="Limpar busca"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 function DocumentThumbnail({
   title,
   preview,
@@ -543,6 +611,13 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
   const [isPlanningFilterSheetOpen, setIsPlanningFilterSheetOpen] = useState(false);
   const [isPresentationSearchOpen, setIsPresentationSearchOpen] = useState(false);
   const [isPresentationFilterSheetOpen, setIsPresentationFilterSheetOpen] = useState(false);
+  const [showArchivedPlannings, setShowArchivedPlannings] = useState(false);
+  const [showArchivedPresentations, setShowArchivedPresentations] = useState(false);
+  const [planningSelectionMode, setPlanningSelectionMode] = useState(false);
+  const [presentationSelectionMode, setPresentationSelectionMode] = useState(false);
+  const [selectedPlanningIds, setSelectedPlanningIds] = useState<string[]>([]);
+  const [selectedPresentationIds, setSelectedPresentationIds] = useState<string[]>([]);
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [clientProfileForm, setClientProfileForm] =
     useState<ClientProfileForm>(initialClientProfileForm);
   const [copyForm, setCopyForm] = useState<CopyPlanningForm>(initialCopyPlanningForm);
@@ -696,6 +771,16 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
     loadClient();
   }, [clientId]);
 
+  useEffect(() => {
+    setPlanningSelectionMode(false);
+    setSelectedPlanningIds([]);
+  }, [showArchivedPlannings]);
+
+  useEffect(() => {
+    setPresentationSelectionMode(false);
+    setSelectedPresentationIds([]);
+  }, [showArchivedPresentations]);
+
   const copyPlanningTitle = useMemo(
     () => buildPlanningTitle(client?.name || "Cliente", copyForm.startDate),
     [client?.name, copyForm.startDate],
@@ -791,10 +876,24 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
     presentationMonth !== "all" ||
     presentationType !== "all" ||
     presentationSort !== "recent";
+  const scopedCopyPlannings = useMemo(
+    () =>
+      copyPlannings.filter((planning) =>
+        showArchivedPlannings ? Boolean(planning.archived_at) : !planning.archived_at,
+      ),
+    [copyPlannings, showArchivedPlannings],
+  );
+  const scopedVisualPresentations = useMemo(
+    () =>
+      visualPresentations.filter((presentation) =>
+        showArchivedPresentations ? Boolean(presentation.archived_at) : !presentation.archived_at,
+      ),
+    [showArchivedPresentations, visualPresentations],
+  );
   const filteredCopyPlannings = useMemo(() => {
     const search = normalizedSearch(planningSearch);
 
-    return [...copyPlannings]
+    return [...scopedCopyPlannings]
       .filter((planning) => {
         const month = monthTagFromDayMonth(planning.start_display_date);
         const searchableText = normalizedSearch(`${planning.title} ${planning.public_slug}`);
@@ -826,11 +925,11 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
 
         return createdTime(secondPlanning) - createdTime(firstPlanning);
       });
-  }, [copyPlannings, planningMonth, planningSearch, planningSort]);
+  }, [planningMonth, planningSearch, planningSort, scopedCopyPlannings]);
   const filteredVisualPresentations = useMemo(() => {
     const search = normalizedSearch(presentationSearch);
 
-    return [...visualPresentations]
+    return [...scopedVisualPresentations]
       .filter((presentation) => {
         const month = monthTagFromDayMonth(presentation.start_display_date);
         const rawType = visualPresentationTypeValue(presentation);
@@ -873,15 +972,19 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
     presentationSearch,
     presentationSort,
     presentationType,
+    scopedVisualPresentations,
     visualArtCounts,
-    visualPresentations,
   ]);
   const planningCounterText = isPlanningFilterActive
-    ? `${filteredCopyPlannings.length} de ${copyPlannings.length} documentos`
-    : `${copyPlannings.length} documento${copyPlannings.length === 1 ? "" : "s"} criado${copyPlannings.length === 1 ? "" : "s"}`;
+    ? `${filteredCopyPlannings.length} de ${scopedCopyPlannings.length} documentos`
+    : showArchivedPlannings
+      ? `${scopedCopyPlannings.length} planejamento${scopedCopyPlannings.length === 1 ? "" : "s"} arquivado${scopedCopyPlannings.length === 1 ? "" : "s"}`
+      : `${scopedCopyPlannings.length} documento${scopedCopyPlannings.length === 1 ? "" : "s"} criado${scopedCopyPlannings.length === 1 ? "" : "s"}`;
   const presentationCounterText = isPresentationFilterActive
-    ? `${filteredVisualPresentations.length} de ${visualPresentations.length} pranchas`
-    : `${visualPresentations.length} prancha${visualPresentations.length === 1 ? "" : "s"} criada${visualPresentations.length === 1 ? "" : "s"}`;
+    ? `${filteredVisualPresentations.length} de ${scopedVisualPresentations.length} pranchas`
+    : showArchivedPresentations
+      ? `${scopedVisualPresentations.length} apresentacao${scopedVisualPresentations.length === 1 ? "" : "s"} arquivada${scopedVisualPresentations.length === 1 ? "" : "s"}`
+      : `${scopedVisualPresentations.length} prancha${scopedVisualPresentations.length === 1 ? "" : "s"} criada${scopedVisualPresentations.length === 1 ? "" : "s"}`;
 
   function resetPlanningFilters() {
     setPlanningSearch("");
@@ -898,6 +1001,124 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
     setPresentationSort("recent");
     setIsPresentationSearchOpen(false);
     setIsPresentationFilterSheetOpen(false);
+  }
+
+  function togglePlanningSelection(id: string) {
+    setSelectedPlanningIds((current) =>
+      current.includes(id)
+        ? current.filter((selectedId) => selectedId !== id)
+        : [...current, id],
+    );
+  }
+
+  function togglePresentationSelection(id: string) {
+    setSelectedPresentationIds((current) =>
+      current.includes(id)
+        ? current.filter((selectedId) => selectedId !== id)
+        : [...current, id],
+    );
+  }
+
+  function cancelPlanningSelection() {
+    setPlanningSelectionMode(false);
+    setSelectedPlanningIds([]);
+  }
+
+  function cancelPresentationSelection() {
+    setPresentationSelectionMode(false);
+    setSelectedPresentationIds([]);
+  }
+
+  async function updatePlanningArchive(ids: string[], archived: boolean) {
+    if (!ids.length) return;
+
+    setBulkActionLoading(true);
+    setError(null);
+
+    const { error: requestError } = await supabase
+      .from("copy_plannings")
+      .update({ archived_at: archived ? new Date().toISOString() : null } as never)
+      .in("id", ids);
+
+    if (requestError) {
+      setError(requestError.message);
+    } else {
+      cancelPlanningSelection();
+      await loadClient();
+    }
+
+    setBulkActionLoading(false);
+  }
+
+  async function updatePresentationArchive(ids: string[], archived: boolean) {
+    if (!ids.length) return;
+
+    setBulkActionLoading(true);
+    setError(null);
+
+    const { error: requestError } = await supabase
+      .from("visual_presentations")
+      .update({ archived_at: archived ? new Date().toISOString() : null } as never)
+      .in("id", ids);
+
+    if (requestError) {
+      setError(requestError.message);
+    } else {
+      cancelPresentationSelection();
+      await loadClient();
+    }
+
+    setBulkActionLoading(false);
+  }
+
+  async function deletePlannings(ids: string[]) {
+    if (!ids.length) return;
+
+    const confirmed = window.confirm(`Excluir ${ids.length} planejamento${ids.length === 1 ? "" : "s"}? Essa acao nao aparece mais na lista.`);
+
+    if (!confirmed) return;
+
+    setBulkActionLoading(true);
+    setError(null);
+
+    const { error: requestError } = await supabase
+      .from("copy_plannings")
+      .update({ deleted_at: new Date().toISOString() } as never)
+      .in("id", ids);
+
+    if (requestError) {
+      setError(requestError.message);
+    } else {
+      cancelPlanningSelection();
+      await loadClient();
+    }
+
+    setBulkActionLoading(false);
+  }
+
+  async function deletePresentations(ids: string[]) {
+    if (!ids.length) return;
+
+    const confirmed = window.confirm(`Excluir ${ids.length} apresentacao${ids.length === 1 ? "" : "s"}? Essa acao nao aparece mais na lista.`);
+
+    if (!confirmed) return;
+
+    setBulkActionLoading(true);
+    setError(null);
+
+    const { error: requestError } = await supabase
+      .from("visual_presentations")
+      .update({ deleted_at: new Date().toISOString() } as never)
+      .in("id", ids);
+
+    if (requestError) {
+      setError(requestError.message);
+    } else {
+      cancelPresentationSelection();
+      await loadClient();
+    }
+
+    setBulkActionLoading(false);
   }
 
   function openCreationModal(mode: Exclude<CreationMode, null>) {
@@ -1235,7 +1456,13 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
             className="h-14 w-14 text-lg md:h-16 md:w-16 md:text-xl"
           />
           <div className="min-w-0">
-            <h1 className="sora-heading mt-1 truncate text-2xl font-medium text-foreground md:text-3xl">{client.name}</h1>
+            <div className="flex min-w-0 items-center gap-2">
+              <h1 className="sora-heading mt-1 truncate text-2xl font-medium text-foreground md:text-3xl">{client.name}</h1>
+              <span className="mt-1 flex shrink-0 items-center gap-1.5" aria-label="Cores do cliente">
+                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: accentColor }} />
+                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: client.secondary_color || accentColor }} />
+              </span>
+            </div>
             <p className="mt-1 truncate text-xs text-muted-foreground md:mt-2 md:text-sm">
               /{client.slug} - criado em {formatDateBR(client.created_at)}
             </p>
@@ -1244,14 +1471,14 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
       </div>
 
       {profileMessage ? (
-        <p className="rounded-lg border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+        <p className="rounded-lg border border-emerald-600 bg-emerald-600 px-4 py-3 text-sm font-medium text-white">
           {profileMessage}
         </p>
       ) : null}
 
       {error && !creationMode ? (
-        <Card className="border-rose-500/30 bg-rose-500/10">
-          <CardContent className="pt-5 text-sm text-rose-100">{error}</CardContent>
+        <Card className="border-rose-600 bg-rose-600 text-white">
+          <CardContent className="pt-5 text-sm font-medium">{error}</CardContent>
         </Card>
       ) : null}
 
@@ -1302,19 +1529,39 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                 onClick={() => openCreationModal("copy")}
               />
 
-              <div className="relative">
-                <Button
-                  type="button"
-                  variant="ghostSecondary"
-                  className={cn(sectionIconButtonClass, planningSearch && "border-foreground/30 text-foreground")}
-                  onClick={() => setIsPlanningSearchOpen((current) => !current)}
-                  aria-label="Buscar planejamentos"
-                  title="Buscar planejamentos"
-                >
-                  <Search className="h-4 w-4" />
-                </Button>
+              <Button
+                type="button"
+                variant="ghostSecondary"
+                className={cn(sectionIconButtonClass, planningSelectionMode && "border-foreground/30 text-foreground")}
+                onClick={() => {
+                  setPlanningSelectionMode((current) => !current);
+                  setSelectedPlanningIds([]);
+                }}
+                aria-label="Selecionar planejamentos"
+                title="Selecionar planejamentos"
+              >
+                <CheckSquare2 className="h-4 w-4" />
+              </Button>
 
-              </div>
+              <Button
+                type="button"
+                variant="ghostSecondary"
+                className={cn(sectionIconButtonClass, showArchivedPlannings && "border-foreground/30 text-foreground")}
+                onClick={() => setShowArchivedPlannings((current) => !current)}
+                aria-label="Arquivados"
+                title="Arquivados"
+              >
+                <Archive className="h-4 w-4" />
+              </Button>
+
+              <InlineSearchControl
+                isOpen={isPlanningSearchOpen}
+                value={planningSearch}
+                placeholder="Buscar planejamento ou conteúdo..."
+                label="Buscar planejamentos"
+                onOpenChange={setIsPlanningSearchOpen}
+                onValueChange={setPlanningSearch}
+              />
 
               <div className="relative">
                 <Button
@@ -1372,42 +1619,52 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
             </div>
           </div>
 
-          {isPlanningSearchOpen ? (
-            <div
-              className="fixed inset-0 z-[110] grid place-items-center bg-black/40 p-4 dark:bg-black/60"
-              onClick={() => setIsPlanningSearchOpen(false)}
-            >
-              <div
-                className="w-full max-w-md rounded-2xl border border-border bg-background p-4"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-base font-medium text-foreground">Buscar</h2>
-                  <Button type="button" variant="ghostSecondary" size="icon" onClick={() => setIsPlanningSearchOpen(false)}>
-                    <X className="h-4 w-4" />
+          {planningSelectionMode ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
+              <span className="mr-auto font-medium text-foreground">
+                {selectedPlanningIds.length} selecionado{selectedPlanningIds.length === 1 ? "" : "s"}
+              </span>
+              {selectedPlanningIds.length ? (
+                showArchivedPlannings ? (
+                  <Button
+                    type="button"
+                    variant="ghostSecondary"
+                    size="sm"
+                    onClick={() => updatePlanningArchive(selectedPlanningIds, false)}
+                    disabled={bulkActionLoading}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Desarquivar
                   </Button>
-                </div>
-                <div className="relative mt-4">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={planningSearch}
-                    onChange={(event) => setPlanningSearch(event.target.value)}
-                    placeholder="Buscar planejamento ou conteúdo..."
-                    autoFocus
-                    className={cn("h-11 pl-9 pr-9", compactControlClass)}
-                  />
-                  {planningSearch ? (
-                    <button
-                      type="button"
-                      onClick={() => setPlanningSearch("")}
-                      className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground"
-                      aria-label="Limpar busca"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  ) : null}
-                </div>
-              </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghostSecondary"
+                    size="sm"
+                    onClick={() => updatePlanningArchive(selectedPlanningIds, true)}
+                    disabled={bulkActionLoading}
+                  >
+                    <Archive className="h-3.5 w-3.5" />
+                    Arquivar
+                  </Button>
+                )
+              ) : null}
+              {selectedPlanningIds.length ? (
+                <Button
+                  type="button"
+                  variant="ghostSecondary"
+                  size="sm"
+                  onClick={() => deletePlannings(selectedPlanningIds)}
+                  disabled={bulkActionLoading}
+                  className="text-rose-500 hover:text-rose-500"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Excluir
+                </Button>
+              ) : null}
+              <Button type="button" variant="ghostSecondary" size="sm" onClick={cancelPlanningSelection}>
+                Cancelar seleção
+              </Button>
             </div>
           ) : null}
 
@@ -1420,27 +1677,49 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                   client.name,
                 );
                 const planningMonthTag = monthTagFromDayMonth(planning.start_display_date);
+                const isSelected = selectedPlanningIds.includes(planning.id);
+                const isArchived = Boolean(planning.archived_at);
 
                 return (
                   <article
                     key={planning.id}
                     role="link"
                     tabIndex={0}
-                    onClick={() => router.push(`/admin/planejamentos/${planning.id}`)}
+                    onClick={() =>
+                      planningSelectionMode
+                        ? togglePlanningSelection(planning.id)
+                        : router.push(`/admin/planejamentos/${planning.id}`)
+                    }
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
-                        router.push(`/admin/planejamentos/${planning.id}`);
+                        if (planningSelectionMode) {
+                          togglePlanningSelection(planning.id);
+                        } else {
+                          router.push(`/admin/planejamentos/${planning.id}`);
+                        }
                       }
                     }}
-                    className="group cursor-pointer rounded-2xl border border-border bg-background p-2 transition hover:-translate-y-0.5 hover:border-foreground/25 sm:p-3"
+                    className={cn(
+                      "group relative cursor-pointer rounded-2xl border bg-background p-2 transition hover:-translate-y-0.5 hover:border-foreground/25 sm:p-3",
+                      isSelected ? "border-[var(--zacx-brand)]" : "border-border",
+                    )}
                   >
+                    {planningSelectionMode ? (
+                      <span
+                        className="absolute left-3 top-3 z-10 grid h-7 w-7 place-items-center rounded-md border border-border bg-background text-foreground"
+                        aria-hidden="true"
+                      >
+                        {isSelected ? <CheckSquare2 className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                      </span>
+                    ) : null}
                     <DocumentThumbnail title={planning.title} preview={previewText} accentColor={accentColor} />
                     <div className="space-y-2 px-1 pb-1 pt-3 sm:space-y-3 sm:pt-4">
                       <div className="flex items-start justify-between gap-2">
                         <h3 className="sora-heading line-clamp-2 text-sm font-medium leading-snug text-foreground sm:text-base">
                           {planning.title}
                         </h3>
+                        {isArchived ? <InfoTag>Arquivado</InfoTag> : null}
                       </div>
                       <div className="space-y-1 text-[11px] text-muted-foreground sm:text-xs">
                         <p>{planning.period_label || "Periodo nao definido"}</p>
@@ -1480,11 +1759,23 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                             </Link>
                           </Button>
                         </div>
-                        {planningMonthTag ? (
-                          <div className="flex shrink-0 items-center gap-1.5">
-                            <InfoTag>{planningMonthTag}</InfoTag>
-                          </div>
-                        ) : null}
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <Button
+                            type="button"
+                            variant="ghostSecondary"
+                            size="icon"
+                            className="h-8 w-8 bg-transparent hover:bg-neutral-900/5 dark:hover:bg-white/[0.08]"
+                            onClick={(event) => {
+                              stopCardClick(event);
+                              updatePlanningArchive([planning.id], !isArchived);
+                            }}
+                            aria-label={isArchived ? "Desarquivar planejamento" : "Arquivar planejamento"}
+                            title={isArchived ? "Desarquivar" : "Arquivar"}
+                          >
+                            {isArchived ? <RotateCcw className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
+                          </Button>
+                          {planningMonthTag ? <InfoTag>{planningMonthTag}</InfoTag> : null}
+                        </div>
                       </div>
                     </div>
                   </article>
@@ -1497,11 +1788,15 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
               title={
                 isPlanningFilterActive
                   ? "Nenhum planejamento encontrado com esses filtros."
+                  : showArchivedPlannings
+                    ? "Nenhum planejamento arquivado."
                   : "Nenhum planejamento criado"
               }
               description={
                 isPlanningFilterActive
                   ? "Limpe os filtros ou ajuste a busca para ver outros documentos."
+                  : showArchivedPlannings
+                    ? "Planejamentos arquivados aparecem aqui quando forem movidos da lista ativa."
                   : "Use o botao de adicionar para criar o primeiro documento mensal deste cliente."
               }
               actionLabel={isPlanningFilterActive ? "Limpar filtros" : undefined}
@@ -1525,19 +1820,39 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                 onClick={() => openCreationModal("visual")}
               />
 
-              <div className="relative">
-                <Button
-                  type="button"
-                  variant="ghostSecondary"
-                  className={cn(sectionIconButtonClass, presentationSearch && "border-foreground/30 text-foreground")}
-                  onClick={() => setIsPresentationSearchOpen((current) => !current)}
-                  aria-label="Buscar apresentações"
-                  title="Buscar apresentações"
-                >
-                  <Search className="h-4 w-4" />
-                </Button>
+              <Button
+                type="button"
+                variant="ghostSecondary"
+                className={cn(sectionIconButtonClass, presentationSelectionMode && "border-foreground/30 text-foreground")}
+                onClick={() => {
+                  setPresentationSelectionMode((current) => !current);
+                  setSelectedPresentationIds([]);
+                }}
+                aria-label="Selecionar apresentações"
+                title="Selecionar apresentações"
+              >
+                <CheckSquare2 className="h-4 w-4" />
+              </Button>
 
-              </div>
+              <Button
+                type="button"
+                variant="ghostSecondary"
+                className={cn(sectionIconButtonClass, showArchivedPresentations && "border-foreground/30 text-foreground")}
+                onClick={() => setShowArchivedPresentations((current) => !current)}
+                aria-label="Arquivadas"
+                title="Arquivadas"
+              >
+                <Archive className="h-4 w-4" />
+              </Button>
+
+              <InlineSearchControl
+                isOpen={isPresentationSearchOpen}
+                value={presentationSearch}
+                placeholder="Buscar apresentação..."
+                label="Buscar apresentações"
+                onOpenChange={setIsPresentationSearchOpen}
+                onValueChange={setPresentationSearch}
+              />
 
               <div className="relative">
                 <Button
@@ -1607,42 +1922,52 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
             </div>
           </div>
 
-          {isPresentationSearchOpen ? (
-            <div
-              className="fixed inset-0 z-[110] grid place-items-center bg-black/40 p-4 dark:bg-black/60"
-              onClick={() => setIsPresentationSearchOpen(false)}
-            >
-              <div
-                className="w-full max-w-md rounded-2xl border border-border bg-background p-4"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-base font-medium text-foreground">Buscar</h2>
-                  <Button type="button" variant="ghostSecondary" size="icon" onClick={() => setIsPresentationSearchOpen(false)}>
-                    <X className="h-4 w-4" />
+          {presentationSelectionMode ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
+              <span className="mr-auto font-medium text-foreground">
+                {selectedPresentationIds.length} selecionada{selectedPresentationIds.length === 1 ? "" : "s"}
+              </span>
+              {selectedPresentationIds.length ? (
+                showArchivedPresentations ? (
+                  <Button
+                    type="button"
+                    variant="ghostSecondary"
+                    size="sm"
+                    onClick={() => updatePresentationArchive(selectedPresentationIds, false)}
+                    disabled={bulkActionLoading}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Desarquivar
                   </Button>
-                </div>
-                <div className="relative mt-4">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={presentationSearch}
-                    onChange={(event) => setPresentationSearch(event.target.value)}
-                    placeholder="Buscar apresentação..."
-                    autoFocus
-                    className={cn("h-11 pl-9 pr-9", compactControlClass)}
-                  />
-                  {presentationSearch ? (
-                    <button
-                      type="button"
-                      onClick={() => setPresentationSearch("")}
-                      className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground"
-                      aria-label="Limpar busca"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  ) : null}
-                </div>
-              </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghostSecondary"
+                    size="sm"
+                    onClick={() => updatePresentationArchive(selectedPresentationIds, true)}
+                    disabled={bulkActionLoading}
+                  >
+                    <Archive className="h-3.5 w-3.5" />
+                    Arquivar
+                  </Button>
+                )
+              ) : null}
+              {selectedPresentationIds.length ? (
+                <Button
+                  type="button"
+                  variant="ghostSecondary"
+                  size="sm"
+                  onClick={() => deletePresentations(selectedPresentationIds)}
+                  disabled={bulkActionLoading}
+                  className="text-rose-500 hover:text-rose-500"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Excluir
+                </Button>
+              ) : null}
+              <Button type="button" variant="ghostSecondary" size="sm" onClick={cancelPresentationSelection}>
+                Cancelar seleção
+              </Button>
             </div>
           ) : null}
 
@@ -1653,21 +1978,42 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                 const detailColor = accentColor;
                 const presentationMonthTag = monthTagFromDayMonth(presentation.start_display_date);
                 const presentationTypeTag = getPresentationTypeLabel(visualPresentationTypeValue(presentation)).toUpperCase();
+                const isSelected = selectedPresentationIds.includes(presentation.id);
+                const isArchived = Boolean(presentation.archived_at);
 
                 return (
                   <article
                     key={presentation.id}
                     role="link"
                     tabIndex={0}
-                    onClick={() => router.push(`/admin/apresentacoes/${presentation.id}`)}
+                    onClick={() =>
+                      presentationSelectionMode
+                        ? togglePresentationSelection(presentation.id)
+                        : router.push(`/admin/apresentacoes/${presentation.id}`)
+                    }
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
-                        router.push(`/admin/apresentacoes/${presentation.id}`);
+                        if (presentationSelectionMode) {
+                          togglePresentationSelection(presentation.id);
+                        } else {
+                          router.push(`/admin/apresentacoes/${presentation.id}`);
+                        }
                       }
                     }}
-                    className="group cursor-pointer rounded-2xl border border-border bg-background p-2 transition hover:-translate-y-0.5 hover:border-foreground/25 sm:p-4"
+                    className={cn(
+                      "group relative cursor-pointer rounded-2xl border bg-background p-2 transition hover:-translate-y-0.5 hover:border-foreground/25 sm:p-4",
+                      isSelected ? "border-[var(--zacx-brand)]" : "border-border",
+                    )}
                   >
+                    {presentationSelectionMode ? (
+                      <span
+                        className="absolute left-3 top-3 z-10 grid h-7 w-7 place-items-center rounded-md border border-border bg-background text-foreground"
+                        aria-hidden="true"
+                      >
+                        {isSelected ? <CheckSquare2 className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                      </span>
+                    ) : null}
                     <PresentationThumbnail
                       title={presentation.title}
                       imageUrl={visualThumbnails[presentation.id]}
@@ -1678,6 +2024,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                         <h3 className="sora-heading line-clamp-2 text-sm font-medium leading-snug text-foreground sm:text-base">
                           {presentation.title}
                         </h3>
+                        {isArchived ? <InfoTag>Arquivada</InfoTag> : null}
                       </div>
                       <div className="space-y-1 text-[11px] text-muted-foreground sm:text-xs">
                         <p>{presentation.period_label || "Periodo nao definido"}</p>
@@ -1718,6 +2065,20 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                           </Button>
                         </div>
                         <div className="ml-auto flex shrink-0 items-center gap-2 pl-3">
+                          <Button
+                            type="button"
+                            variant="ghostSecondary"
+                            size="icon"
+                            className="h-8 w-8 bg-transparent hover:bg-neutral-900/5 dark:hover:bg-white/[0.08]"
+                            onClick={(event) => {
+                              stopCardClick(event);
+                              updatePresentationArchive([presentation.id], !isArchived);
+                            }}
+                            aria-label={isArchived ? "Desarquivar apresentação" : "Arquivar apresentação"}
+                            title={isArchived ? "Desarquivar" : "Arquivar"}
+                          >
+                            {isArchived ? <RotateCcw className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
+                          </Button>
                           {presentationMonthTag ? <InfoTag>{presentationMonthTag}</InfoTag> : null}
                           <InfoTag>{presentationTypeTag}</InfoTag>
                         </div>
@@ -1733,11 +2094,15 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
               title={
                 isPresentationFilterActive
                   ? "Nenhuma apresentação encontrada com esses filtros."
+                  : showArchivedPresentations
+                    ? "Nenhuma apresentação arquivada."
                   : "Nenhuma apresentacao criada"
               }
               description={
                 isPresentationFilterActive
                   ? "Limpe os filtros ou ajuste a busca para ver outras pranchas."
+                  : showArchivedPresentations
+                    ? "Apresentações arquivadas aparecem aqui quando forem movidas da lista ativa."
                   : "Use o botao de adicionar para criar a primeira prancha visual deste cliente."
               }
               actionLabel={isPresentationFilterActive ? "Limpar filtros" : undefined}

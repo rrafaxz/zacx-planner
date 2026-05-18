@@ -187,10 +187,12 @@ function PublicVisualItemSection({
 function PublicWeekSelection({
   weeks,
   items,
+  selectedWeekId,
   onSelectWeek,
 }: {
   weeks: VisualPresentationWeek[];
   items: VisualItemWithImages[];
+  selectedWeekId: string | null;
   onSelectWeek: (weekId: string) => void;
 }) {
   return (
@@ -203,7 +205,12 @@ function PublicWeekSelection({
             key={week.id}
             type="button"
             onClick={() => onSelectWeek(week.id)}
-            className="rounded-xl border border-dashed border-border bg-background px-4 py-5 text-left transition-colors hover:border-foreground/35 hover:bg-foreground/[0.02]"
+            className={cn(
+              "rounded-xl border border-dashed bg-background px-4 py-5 text-left transition-colors hover:border-foreground/35 hover:bg-foreground/[0.02]",
+              selectedWeekId === week.id
+                ? "border-[var(--zacx-brand)] dark:border-[var(--zacx-brand)]"
+                : "border-border",
+            )}
           >
             <span className="sora-heading block text-sm font-semibold uppercase text-foreground">{week.actionLabel}</span>
             <span className="mt-1 block text-xs text-muted-foreground">{week.periodLabel}</span>
@@ -231,7 +238,7 @@ export function PublicVisualPresentationView({ slug }: PublicVisualPresentationV
   );
   const shouldShowWeekSelection = presentationWeeks.length > 1;
   const selectedWeek = shouldShowWeekSelection
-    ? presentationWeeks.find((week) => week.id === selectedWeekId) ?? null
+    ? presentationWeeks.find((week) => week.id === selectedWeekId) ?? presentationWeeks[0] ?? null
     : presentationWeeks[0] ?? null;
   const visibleItems = selectedWeek ? filterVisualItemsForWeek(items, selectedWeek) : items;
 
@@ -307,6 +314,16 @@ export function PublicVisualPresentationView({ slug }: PublicVisualPresentationV
     setSelectedWeekId(null);
   }, [slug]);
 
+  useEffect(() => {
+    if (!shouldShowWeekSelection || !presentationWeeks.length) return;
+
+    setSelectedWeekId((currentWeekId) =>
+      currentWeekId && presentationWeeks.some((week) => week.id === currentWeekId)
+        ? currentWeekId
+        : presentationWeeks[0].id,
+    );
+  }, [presentationWeeks, shouldShowWeekSelection]);
+
   if (loading) {
     return (
       <main
@@ -355,27 +372,22 @@ export function PublicVisualPresentationView({ slug }: PublicVisualPresentationV
           </Card>
         ) : null}
 
-        {shouldShowWeekSelection && !selectedWeek ? (
+        {shouldShowWeekSelection ? (
           <PublicWeekSelection
             weeks={presentationWeeks}
             items={items}
+            selectedWeekId={selectedWeek?.id ?? null}
             onSelectWeek={setSelectedWeekId}
           />
-        ) : (
+        ) : null}
+
         <section className="mt-5 md:mt-6">
           {shouldShowWeekSelection && selectedWeek ? (
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <div className="mb-5">
               <div>
                 <h2 className="sora-heading text-base font-semibold text-foreground">{selectedWeek.label}</h2>
                 <p className="text-xs text-muted-foreground">{selectedWeek.periodLabel}</p>
               </div>
-              <button
-                type="button"
-                onClick={() => setSelectedWeekId(null)}
-                className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-              >
-                ← Voltar para semanas
-              </button>
             </div>
           ) : null}
 
@@ -407,7 +419,6 @@ export function PublicVisualPresentationView({ slug }: PublicVisualPresentationV
             </Card>
           )}
         </section>
-        )}
 
       </section>
     </main>
