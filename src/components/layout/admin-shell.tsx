@@ -7,8 +7,6 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
-  ExternalLink,
-  FileText,
   Menu,
   Moon,
   Sun,
@@ -17,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { PwaInstallButton } from "@/components/pwa-install-button";
 import { useTheme } from "@/components/theme/theme-provider";
 import { ZacxLogo } from "@/components/zacx-logo";
 import { ZacxMark } from "@/components/zacx-mark";
@@ -127,6 +126,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                     </Link>
                   );
                 })}
+
+                <PwaInstallButton />
               </nav>
             </aside>
           </div>
@@ -215,29 +216,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
+
         </nav>
 
-        <div
-          className={cn(
-            "absolute bottom-5 left-4 right-4 rounded-lg border border-border bg-background p-4",
-            isCollapsed && "grid place-items-center p-3",
-          )}
-        >
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <FileText className="h-4 w-4" />
-            {!isCollapsed ? "Fluxo publico" : null}
-          </div>
-          {!isCollapsed ? (
-            <>
-              <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                Planejamentos e apresentacoes possuem links publicos separados.
-              </p>
-              <div className="mt-3 flex items-center gap-1 text-xs text-muted-foreground">
-                /p/[slug] e /a/[slug] <ExternalLink className="h-3 w-3" />
-              </div>
-            </>
-          ) : null}
-        </div>
+        <nav className="absolute bottom-5 left-4 right-4 grid gap-2">
+          <PwaInstallButton compact={isCollapsed} />
+        </nav>
       </aside>
 
       <main
