@@ -308,7 +308,7 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
                         event.currentTarget.blur();
                       }
                     }}
-                    className="block w-full max-w-[560px] truncate rounded-md border border-transparent bg-transparent px-1 py-0.5 text-xl font-medium tracking-normal text-foreground outline-none transition hover:border-border focus:border-foreground/30 md:text-2xl"
+                    className="sora-heading block w-full max-w-[560px] truncate rounded-md border border-transparent bg-transparent px-1 py-0.5 text-xl font-medium tracking-normal text-foreground outline-none transition hover:border-border focus:border-foreground/30 md:text-2xl"
                   />
                   <p className="mt-0.5 truncate px-1 text-[11px] text-muted-foreground">
                     {client?.name || "Cliente"} — {planning.period_label || "Periodo nao definido"}

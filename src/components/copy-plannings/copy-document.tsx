@@ -973,7 +973,7 @@ function TiptapSection({
     const y = event.clientY;
 
     menu.className =
-      "fixed z-[100] min-w-48 overflow-hidden rounded-xl border border-black/10 bg-white p-1 text-sm text-neutral-900 shadow-sm dark:border-white/10 dark:bg-neutral-950 dark:text-white";
+      "fixed z-[100] min-w-48 overflow-hidden rounded-xl border border-black/10 bg-white p-1 text-sm text-neutral-900 shadow-sm dark:border-white/10 dark:bg-background dark:text-white";
     menu.style.left = `${x}px`;
     menu.style.top = `${y}px`;
 
@@ -1022,7 +1022,7 @@ function TiptapSection({
     <div
       className={cn(
         "copy-document-editor rounded-[26px] border px-7 py-10 shadow-sm sm:px-12 sm:py-14 lg:px-16 lg:py-16",
-        theme === "light" ? "copy-document-editor-light border-neutral-200 bg-white text-neutral-950" : "copy-document-editor-dark border-white/10 bg-black text-white",
+        theme === "light" ? "copy-document-editor-light border-neutral-200 bg-white text-neutral-950" : "copy-document-editor-dark border-white/10 bg-background text-white",
       )}
     >
       <div contentEditable={false} className="copy-document-fixed-header select-none">
@@ -1329,7 +1329,7 @@ export function CopyDocument({
 
         .copy-document-fixed-header h2 {
           margin: 0 0 4px !important;
-          font-family: Sora, Poppins, Arial, sans-serif;
+          font-family: var(--font-sora), Sora, Poppins, Arial, sans-serif;
           font-size: clamp(22px, 3vw, 30px);
           line-height: 1.12;
           font-weight: 700;
@@ -1338,7 +1338,7 @@ export function CopyDocument({
 
         .copy-document-fixed-header p {
           margin: 0 !important;
-          font-family: Sora, Poppins, Arial, sans-serif;
+          font-family: var(--font-sora), Sora, Poppins, Arial, sans-serif;
           font-size: clamp(13px, 1.4vw, 16px);
           line-height: 1.35;
           font-weight: 500;
@@ -1385,6 +1385,13 @@ export function CopyDocument({
         .tiptap-copy-editor .ProseMirror ol,
         .tiptap-copy-editor .ProseMirror blockquote {
           margin-bottom: 0.85em;
+        }
+
+        .tiptap-copy-editor .ProseMirror h1,
+        .tiptap-copy-editor .ProseMirror h2,
+        .tiptap-copy-editor .ProseMirror h3 {
+          font-family: var(--font-sora), Sora, Poppins, Arial, sans-serif;
+          letter-spacing: 0;
         }
 
         .tiptap-copy-editor .ProseMirror ul {

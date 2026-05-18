@@ -27,7 +27,7 @@ export function PublicClientHeading({ client, title, periodLabel }: PublicClient
       </div>
 
       <div className="ml-auto min-w-0 max-w-[52%] text-right sm:max-w-[62%]">
-        <h1 className="truncate text-xl font-medium tracking-normal text-foreground sm:text-3xl md:text-5xl">
+        <h1 className="sora-heading truncate text-xl font-medium tracking-normal text-foreground sm:text-3xl md:text-5xl">
           {title}
         </h1>
         <p className="mt-1 truncate text-xs text-muted-foreground sm:mt-2 sm:text-sm">

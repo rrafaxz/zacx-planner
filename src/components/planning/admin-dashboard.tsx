@@ -92,7 +92,7 @@ export function AdminDashboard() {
     <section className="space-y-6 md:space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="mt-2 text-2xl font-medium tracking-normal text-foreground md:text-4xl">
+          <h1 className="sora-heading mt-2 text-2xl font-medium tracking-normal text-foreground md:text-4xl">
             Controle de conteudo e apresentacoes
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground md:mt-3">

@@ -1,10 +1,27 @@
 "use client";
 
-import { type CSSProperties, type PointerEvent, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, ImageIcon, Pencil, Trash2 } from "lucide-react";
+import {
+  type CSSProperties,
+  type HTMLAttributes,
+  type PointerEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  GripVertical,
+  ImageIcon,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { storyImageMetadata } from "@/components/visual-presentations/story-image-notes";
+import { formatDateInput } from "@/lib/date-mask";
 import { supabase } from "@/lib/supabase/client";
 import type { Client, VisualItem, VisualItemImage } from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
@@ -24,18 +41,33 @@ type VisualItemBoardProps = {
   presentationTitle?: string;
   variant?: "admin" | "public";
   theme?: VisualTheme;
+  onActiveImageChange?: (image: VisualArtworkImage | null, index: number) => void;
+  onQuickUpdate?: (
+    item: VisualItemWithImages,
+    values: {
+      displayDate?: string;
+      weekday?: string;
+      imageId?: string | null;
+      imageIndex?: number;
+    },
+  ) => void;
+  showDragHandle?: boolean;
+  dragHandleProps?: HTMLAttributes<HTMLSpanElement>;
 };
 
-type ArtworkImage = {
+export type VisualArtworkImage = {
   id: string;
   image_url: string | null;
   image_path: string | null;
   label: string | null;
+  display_date?: string | null;
+  weekday?: string | null;
 };
 
 const visualPresentationsBucket = "visual-presentations";
 const legacyPresentationAssetsBucket = "presentation-assets";
 const readablePresentationBuckets = [visualPresentationsBucket, legacyPresentationAssetsBucket];
+const compactWeekdays = ["SEG", "TER", "QUA", "QUI", "SEX", "SÁB", "DOM"];
 
 function readStringValue(source: unknown, key: string) {
   if (!source || typeof source !== "object") return null;
@@ -168,16 +200,33 @@ function modeFromItem(item: VisualItem) {
 
 function imagesFromItems(items: VisualItemWithImages[]) {
   return items.flatMap((item) => {
+    const mode = modeFromItem(item);
+
     if (item.images?.length) {
       const normalizedImages = item.images
-        .map((image) => {
+        .map((image, index) => {
           const normalizedSource = normalizeImageSource(image);
+          const metadata =
+            mode === "stories"
+              ? storyImageMetadata({
+                  notes: item.notes,
+                  imageId: image.id,
+                  orderIndex: image.order_index ?? index,
+                  fallbackDate: item.display_date,
+                  fallbackWeekday: item.weekday,
+                })
+              : {
+                  displayDate: item.display_date,
+                  weekday: item.weekday,
+                };
 
           return {
             id: image.id,
             image_url: normalizedSource.image_url,
             image_path: normalizedSource.image_path,
             label: item.label,
+            display_date: metadata.displayDate,
+            weekday: metadata.weekday,
           };
         })
         .filter((image) => Boolean(image.image_url));
@@ -196,6 +245,8 @@ function imagesFromItems(items: VisualItemWithImages[]) {
           image_url: normalizedSource.image_url,
           image_path: normalizedSource.image_path,
           label: item.label,
+          display_date: item.display_date,
+          weekday: item.weekday,
         },
       ];
     }
@@ -206,6 +257,8 @@ function imagesFromItems(items: VisualItemWithImages[]) {
         image_url: null,
         image_path: null,
         label: item.label,
+        display_date: item.display_date,
+        weekday: item.weekday,
       },
     ];
   });
@@ -242,7 +295,7 @@ function ImageFrame({
   className,
   priority = false,
 }: {
-  image: ArtworkImage;
+  image: VisualArtworkImage;
   className?: string;
   priority?: boolean;
 }) {
@@ -298,11 +351,13 @@ function ArtworkViewer({
   mode,
   variant,
   theme,
+  onActiveImageChange,
 }: {
-  images: ArtworkImage[];
+  images: VisualArtworkImage[];
   mode: string;
   variant: "admin" | "public";
   theme: VisualTheme;
+  onActiveImageChange?: (image: VisualArtworkImage | null, index: number) => void;
 }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -324,6 +379,10 @@ function ArtworkViewer({
   useEffect(() => {
     setActiveIndex((currentIndex) => Math.min(currentIndex, Math.max(images.length - 1, 0)));
   }, [images.length]);
+
+  useEffect(() => {
+    onActiveImageChange?.(images[activeIndex] ?? null, activeIndex);
+  }, [activeIndex, imageKey, onActiveImageChange]);
 
   function goToIndex(index: number) {
     setActiveIndex(Math.min(Math.max(index, 0), images.length - 1));
@@ -503,69 +562,174 @@ function PublicArtwork({
   images,
   mode,
   theme,
+  onActiveImageChange,
 }: {
-  images: ArtworkImage[];
+  images: VisualArtworkImage[];
   mode: string;
   theme: VisualTheme;
+  onActiveImageChange?: (image: VisualArtworkImage | null, index: number) => void;
 }) {
-  return <ArtworkViewer images={images} mode={mode} theme={theme} variant="public" />;
+  return (
+    <ArtworkViewer
+      images={images}
+      mode={mode}
+      theme={theme}
+      variant="public"
+      onActiveImageChange={onActiveImageChange}
+    />
+  );
 }
 
 function AdminArtwork({
   images,
   mode,
   theme,
+  onActiveImageChange,
 }: {
-  images: ArtworkImage[];
+  images: VisualArtworkImage[];
   mode: string;
   theme: VisualTheme;
+  onActiveImageChange?: (image: VisualArtworkImage | null, index: number) => void;
 }) {
-  return <ArtworkViewer images={images} mode={mode} theme={theme} variant="admin" />;
+  return (
+    <ArtworkViewer
+      images={images}
+      mode={mode}
+      theme={theme}
+      variant="admin"
+      onActiveImageChange={onActiveImageChange}
+    />
+  );
 }
 
-export function VisualItemBoard({
-  items,
+function AdminVisualItemCard({
+  firstItem,
+  mode,
+  images,
   onEdit,
   onDelete,
   deletingItemId,
-  variant = "admin",
-  theme = "dark",
-}: VisualItemBoardProps) {
-  if (!items.length) return null;
+  theme,
+  onQuickUpdate,
+  showDragHandle = false,
+  dragHandleProps,
+}: {
+  firstItem: VisualItemWithImages;
+  mode: string;
+  images: VisualArtworkImage[];
+  onEdit?: (item: VisualItemWithImages) => void;
+  onDelete?: (item: VisualItemWithImages) => void;
+  deletingItemId?: string | null;
+  theme: VisualTheme;
+  onQuickUpdate?: VisualItemBoardProps["onQuickUpdate"];
+  showDragHandle?: boolean;
+  dragHandleProps?: HTMLAttributes<HTMLSpanElement>;
+}) {
+  const [activeAdminImage, setActiveAdminImage] = useState<VisualArtworkImage | null>(null);
+  const [activeAdminImageIndex, setActiveAdminImageIndex] = useState(0);
+  const headerImage = mode === "stories" ? activeAdminImage || images[0] : images[0];
+  const [quickDate, setQuickDate] = useState(headerImage?.display_date || firstItem.display_date || "");
+  const [quickWeekday, setQuickWeekday] = useState(headerImage?.weekday || firstItem.weekday || "SEG");
 
-  const firstItem = items[0];
-  const mode = modeFromItem(firstItem);
-  const images = imagesFromItems(items);
+  useEffect(() => {
+    setQuickDate(headerImage?.display_date || firstItem.display_date || "");
+    setQuickWeekday(headerImage?.weekday || firstItem.weekday || "SEG");
+  }, [firstItem.display_date, firstItem.weekday, headerImage?.display_date, headerImage?.id, headerImage?.weekday]);
 
-  if (variant === "public") {
-    return (
-      <article>
-        <PublicArtwork images={images} mode={mode} theme={theme} />
-      </article>
-    );
+  function quickUpdatePayload(values: { displayDate?: string; weekday?: string }) {
+    return {
+      ...values,
+      imageId: mode === "stories" ? headerImage?.id ?? null : null,
+      imageIndex: mode === "stories" ? activeAdminImageIndex : undefined,
+    };
+  }
+
+  function commitQuickDate() {
+    const normalizedDate = formatDateInput(quickDate);
+
+    setQuickDate(normalizedDate);
+    onQuickUpdate?.(firstItem, quickUpdatePayload({ displayDate: normalizedDate }));
+  }
+
+  function commitQuickWeekday(nextWeekday: string) {
+    setQuickWeekday(nextWeekday);
+    onQuickUpdate?.(firstItem, quickUpdatePayload({ weekday: nextWeekday }));
+  }
+
+  function handleActiveImageChange(image: VisualArtworkImage | null, index: number) {
+    setActiveAdminImage(image);
+    setActiveAdminImageIndex(index);
   }
 
   return (
-    <Card className="overflow-hidden border-border bg-card">
+    <Card className="overflow-hidden border-border bg-background">
       <CardContent className="space-y-4 p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-md border border-border bg-secondary px-2.5 py-1 text-xs font-medium uppercase text-foreground">
+              <span className="sora-heading rounded-md border border-border bg-secondary px-2.5 py-1 text-xs font-medium uppercase text-foreground">
                 {formatLabel(mode)}
               </span>
-              <span className="rounded-md border border-border bg-background px-2.5 py-1 text-xs font-semibold text-foreground">
-                {firstItem.display_date || "--/--"}
-              </span>
-              <span className="text-xs uppercase text-muted-foreground">
-                {firstItem.weekday || "--"}
-              </span>
+              {onQuickUpdate ? (
+                <>
+                  <input
+                    value={quickDate}
+                    inputMode="numeric"
+                    maxLength={5}
+                    onChange={(event) => setQuickDate(formatDateInput(event.target.value))}
+                    onBlur={commitQuickDate}
+                    className="h-8 w-[72px] rounded-md border border-border bg-background px-2 text-center text-xs font-semibold text-foreground outline-none transition-colors focus:border-foreground/40"
+                    aria-label="Editar data"
+                    title="Editar data"
+                  />
+                  <select
+                    value={quickWeekday}
+                    onChange={(event) => commitQuickWeekday(event.target.value)}
+                    className="h-8 rounded-md border border-border bg-background px-2 text-xs font-semibold uppercase text-foreground outline-none transition-colors focus:border-foreground/40"
+                    aria-label="Editar dia da semana"
+                    title="Editar dia da semana"
+                  >
+                    {compactWeekdays.map((weekday) => (
+                      <option key={weekday} value={weekday}>
+                        {weekday}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              ) : (
+                <>
+                  <span className="rounded-md border border-border bg-background px-2.5 py-1 text-xs font-semibold text-foreground">
+                    {headerImage?.display_date || firstItem.display_date || "--/--"}
+                  </span>
+                  <span className="text-xs uppercase text-muted-foreground">
+                    {headerImage?.weekday || firstItem.weekday || "--"}
+                  </span>
+                </>
+              )}
               <span className="text-xs text-muted-foreground">
                 {images.length} {images.length === 1 ? "imagem" : "imagens"}
               </span>
             </div>
+            {mode === "stories" && images.length > 1 ? (
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                Editando a data do Story {activeAdminImageIndex + 1}/{images.length}
+              </p>
+            ) : null}
           </div>
           <div className="flex shrink-0 gap-1">
+            {showDragHandle ? (
+              <span
+                {...dragHandleProps}
+                className={cn(
+                  "grid h-8 w-8 cursor-grab place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground active:cursor-grabbing",
+                  dragHandleProps?.className,
+                )}
+                aria-hidden={dragHandleProps?.["aria-label"] ? undefined : true}
+                title="Arrastar para reorganizar"
+              >
+                <GripVertical className="h-4 w-4" />
+              </span>
+            ) : null}
             {onEdit ? (
               <Button
                 type="button"
@@ -597,9 +761,61 @@ export function VisualItemBoard({
         </div>
 
         <div className="border-t border-border/70 pt-4">
-          <AdminArtwork images={images} mode={mode} theme={theme} />
+          <AdminArtwork
+            images={images}
+            mode={mode}
+            theme={theme}
+            onActiveImageChange={handleActiveImageChange}
+          />
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+export function VisualItemBoard({
+  items,
+  onEdit,
+  onDelete,
+  deletingItemId,
+  variant = "admin",
+  theme = "dark",
+  onActiveImageChange,
+  onQuickUpdate,
+  showDragHandle,
+  dragHandleProps,
+}: VisualItemBoardProps) {
+  if (!items.length) return null;
+
+  const firstItem = items[0];
+  const mode = modeFromItem(firstItem);
+  const images = imagesFromItems(items);
+
+  if (variant === "public") {
+    return (
+      <article>
+        <PublicArtwork
+          images={images}
+          mode={mode}
+          theme={theme}
+          onActiveImageChange={onActiveImageChange}
+        />
+      </article>
+    );
+  }
+
+  return (
+    <AdminVisualItemCard
+      firstItem={firstItem}
+      mode={mode}
+      images={images}
+      onEdit={onEdit}
+      onDelete={onDelete}
+      deletingItemId={deletingItemId}
+      theme={theme}
+      onQuickUpdate={onQuickUpdate}
+      showDragHandle={showDragHandle}
+      dragHandleProps={dragHandleProps}
+    />
   );
 }

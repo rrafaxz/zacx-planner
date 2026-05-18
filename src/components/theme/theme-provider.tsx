@@ -1,7 +1,6 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { usePathname } from "next/navigation";
 import { Moon, Sun } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -19,7 +18,7 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 const storageKey = "zacx-theme";
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("dark");
+  const [theme, setTheme] = useState<Theme>("light");
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -33,6 +32,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!mounted) return;
+
     const root = document.documentElement;
 
     root.classList.toggle("dark", theme === "dark");
@@ -40,7 +41,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     root.dataset.theme = theme;
     root.style.colorScheme = theme;
     window.localStorage.setItem(storageKey, theme);
-  }, [theme]);
+  }, [mounted, theme]);
 
   const value = useMemo(
     () => ({
@@ -71,12 +72,6 @@ export function useTheme() {
 
 function GlobalThemeToggle() {
   const { theme, isLight, toggleTheme } = useTheme();
-  const pathname = usePathname();
-  const isPublicDocument = pathname?.startsWith("/a/") || pathname?.startsWith("/p/");
-
-  if (isPublicDocument) {
-    return null;
-  }
 
   return (
     <Button
@@ -86,10 +81,10 @@ function GlobalThemeToggle() {
       onClick={toggleTheme}
       aria-label="Alternar tema"
       className={cn(
-        "fixed right-4 top-4 z-[70] hidden h-10 w-10 rounded-lg border transition-colors md:inline-flex",
+        "fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-4 z-[70] inline-flex h-10 w-10 rounded-full border shadow-none transition-colors",
         isLight
-          ? "border-neutral-200 bg-white text-neutral-950 shadow-sm hover:bg-neutral-100"
-          : "border-white/10 bg-[#17171A] text-white shadow-sm hover:bg-[#202024]",
+          ? "border-neutral-200 bg-white text-neutral-950 hover:bg-neutral-100"
+          : "border-white/15 bg-background text-white hover:bg-white/[0.06]",
       )}
     >
       {theme === "dark" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}

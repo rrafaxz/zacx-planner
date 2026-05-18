@@ -14,7 +14,10 @@ export type WeekStatus =
   | "changes_requested";
 
 export type ApprovalResponseType = "approved" | "changes_requested";
-export type PresentationType = "semanal" | "quinzenal" | "personalizada" | string;
+export type PresentationType =
+  | "semanal"
+  | "quinzenal"
+  | "mensal";
 
 export type Client = {
   id: string;
@@ -113,7 +116,7 @@ export type VisualPresentation = {
   period_label: string | null;
   start_display_date?: string | null;
   end_display_date?: string | null;
-  presentation_type: PresentationType | null;
+  presentation_type?: PresentationType | null;
   detail_color: string | null;
   status: WeekStatus | string | null;
   is_public: boolean | null;

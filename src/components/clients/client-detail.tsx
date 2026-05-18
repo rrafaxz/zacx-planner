@@ -34,6 +34,7 @@ import {
 import { optimizeImage } from "@/lib/image-optimizer";
 import { supabase } from "@/lib/supabase/client";
 import type { Client, CopyPlanning, VisualPresentation } from "@/lib/supabase/types";
+import { resolveUniquePublicSlug } from "@/lib/unique-public-slug";
 import { cn, formatDateBR } from "@/lib/utils";
 
 type ClientDetailProps = {
@@ -63,7 +64,7 @@ type CreationMode = "copy" | "visual" | null;
 type MonthFilter = "all" | string;
 type PlanningSort = "recent" | "oldest" | "az" | "za" | "more-content" | "less-content";
 type PresentationSort = "recent" | "oldest" | "az" | "za" | "more-art" | "less-art";
-type PresentationTypeFilter = "all" | "weekly" | "biweekly" | "custom";
+type PresentationTypeFilter = "all" | "semanal" | "quinzenal" | "mensal";
 
 type CopyPlanningWithPreview = CopyPlanning & {
   start_display_date?: string | null;
@@ -97,7 +98,7 @@ const initialCopyPlanningForm: CopyPlanningForm = {
 const initialVisualPresentationForm: VisualPresentationForm = {
   startDate: "",
   endDate: "",
-  presentationType: "weekly",
+  presentationType: "semanal",
 };
 
 const initialClientProfileForm: ClientProfileForm = {
@@ -111,11 +112,17 @@ const initialClientProfileForm: ClientProfileForm = {
 const presentationTypeLabels: Record<string, string> = {
   weekly: "Semanal",
   biweekly: "Quinzenal",
-  custom: "Personalizada",
+  monthly: "Mensal",
   semanal: "Semanal",
   quinzenal: "Quinzenal",
-  personalizada: "Personalizada",
+  mensal: "Mensal",
 };
+
+const visualPresentationTypeOptions = [
+  { value: "semanal", label: "Semanal" },
+  { value: "quinzenal", label: "Quinzenal" },
+  { value: "mensal", label: "Mensal" },
+] as const;
 
 const monthAbbreviations = [
   "JAN",
@@ -171,20 +178,99 @@ function buildPeriodLabel(startDate: string, endDate: string) {
   return `${startDate} a ${endDate}`;
 }
 
-function getPresentationTypeLabel(type?: string | null) {
-  if (!type) return "Personalizada";
+function dayMonthDate(value: string, year = 2026) {
+  const formattedValue = formatDateInput(value);
 
-  return presentationTypeLabels[type] || type;
+  if (!isValidDayMonth(formattedValue)) return null;
+
+  const [dayText, monthText] = formattedValue.split("/");
+
+  return new Date(year, Number(monthText) - 1, Number(dayText), 12, 0, 0, 0);
+}
+
+function formatDayMonthDate(date: Date) {
+  return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function addDaysToDayMonth(value: string, days: number) {
+  const date = dayMonthDate(value);
+
+  if (!date) return "";
+
+  date.setDate(date.getDate() + days);
+  return formatDayMonthDate(date);
+}
+
+function endOfMonthFromDayMonth(value: string) {
+  const date = dayMonthDate(value);
+
+  if (!date) return "";
+
+  return formatDayMonthDate(new Date(date.getFullYear(), date.getMonth() + 1, 0, 12, 0, 0, 0));
+}
+
+function suggestedVisualEndDate(startDate: string, presentationType: string) {
+  if (!isValidDayMonth(startDate)) return "";
+
+  const normalizedType = normalizePresentationTypeForSave(presentationType);
+
+  if (normalizedType === "quinzenal") {
+    return addDaysToDayMonth(startDate, 13);
+  }
+
+  if (normalizedType === "mensal") {
+    const startDateObject = dayMonthDate(startDate);
+    const endOfMonth = dayMonthDate(endOfMonthFromDayMonth(startDate));
+    const fourWeeksEnd = dayMonthDate(addDaysToDayMonth(startDate, 27));
+
+    if (!startDateObject || !endOfMonth || !fourWeeksEnd) return "";
+
+    return formatDayMonthDate(
+      endOfMonth.getTime() - startDateObject.getTime() >= 27 * 24 * 60 * 60 * 1000
+        ? endOfMonth
+        : fourWeeksEnd,
+    );
+  }
+
+  return addDaysToDayMonth(startDate, 6);
+}
+
+function withSuggestedVisualEndDate(
+  currentForm: VisualPresentationForm,
+  updates: Partial<VisualPresentationForm>,
+) {
+  const nextForm = { ...currentForm, ...updates };
+  const suggestedEndDate = suggestedVisualEndDate(nextForm.startDate, nextForm.presentationType);
+
+  return suggestedEndDate ? { ...nextForm, endDate: suggestedEndDate } : nextForm;
+}
+
+function getPresentationTypeLabel(type?: string | null) {
+  if (!type) return "Semanal";
+
+  return presentationTypeLabels[type] || presentationTypeLabels[normalizePresentationType(type)] || "Semanal";
 }
 
 function normalizePresentationType(type?: string | null): PresentationTypeFilter {
   const value = `${type ?? ""}`.toLowerCase();
 
-  if (value.includes("quinzenal") || value.includes("biweekly")) return "biweekly";
-  if (value.includes("personalizada") || value.includes("custom")) return "custom";
-  if (value.includes("semanal") || value.includes("weekly")) return "weekly";
+  if (value.includes("quinzenal") || value.includes("biweekly")) return "quinzenal";
+  if (value.includes("mensal") || value.includes("monthly")) return "mensal";
+  if (value.includes("semanal") || value.includes("weekly")) return "semanal";
 
-  return "custom";
+  return "semanal";
+}
+
+function normalizePresentationTypeForSave(type?: string | null) {
+  const normalizedType = normalizePresentationType(type);
+
+  return visualPresentationTypeOptions.some((option) => option.value === normalizedType)
+    ? normalizedType
+    : "semanal";
+}
+
+function visualPresentationTypeValue(presentation: VisualPresentation) {
+  return presentation.presentation_type || null;
 }
 
 function monthTagFromDayMonth(value?: string | null) {
@@ -342,7 +428,7 @@ function DocumentThumbnail({
   return (
     <div className="h-32 overflow-hidden rounded-lg border border-black/10 bg-white p-3 text-neutral-950 sm:h-48 sm:p-4">
       <div className="mx-auto mb-4 h-1 w-12 rounded-full" style={{ backgroundColor: accentColor }} />
-      <h3 className="line-clamp-2 text-center font-[Sora,Poppins,Arial,sans-serif] text-xs font-semibold uppercase leading-snug text-neutral-950 sm:text-sm">
+      <h3 className="sora-heading line-clamp-2 text-center text-xs font-semibold uppercase leading-snug text-neutral-950 sm:text-sm">
         {title}
       </h3>
       {preview ? (
@@ -428,7 +514,7 @@ function EmptyLibraryState({
       <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl border border-border bg-background text-muted-foreground">
         <Icon className="h-5 w-5" />
       </div>
-      <h3 className="mt-4 text-base font-medium text-foreground">{title}</h3>
+      <h3 className="sora-heading mt-4 text-base font-medium text-foreground">{title}</h3>
       <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">{description}</p>
       {actionLabel && onAction ? (
         <Button type="button" variant="ghostSecondary" size="sm" className="mt-5" onClick={onAction}>
@@ -471,6 +557,10 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
   const [savingClientProfile, setSavingClientProfile] = useState(false);
   const [uploadingClientLogo, setUploadingClientLogo] = useState(false);
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
+  const [copyPublicSlug, setCopyPublicSlug] = useState("");
+  const [visualPublicSlug, setVisualPublicSlug] = useState("");
+  const [copySlugLoading, setCopySlugLoading] = useState(false);
+  const [visualSlugLoading, setVisualSlugLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [creationError, setCreationError] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -610,7 +700,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
     () => buildPlanningTitle(client?.name || "Cliente", copyForm.startDate),
     [client?.name, copyForm.startDate],
   );
-  const copyPublicSlug = useMemo(
+  const copyBasePublicSlug = useMemo(
     () => buildSlugFromTitle(copyPlanningTitle),
     [copyPlanningTitle],
   );
@@ -618,10 +708,82 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
     () => buildPresentationTitle(client?.name || "Cliente", visualForm.startDate, visualForm.endDate),
     [client?.name, visualForm.startDate, visualForm.endDate],
   );
-  const visualPublicSlug = useMemo(
+  const visualBasePublicSlug = useMemo(
     () => buildSlugFromTitle(visualPresentationTitle),
     [visualPresentationTitle],
   );
+
+  useEffect(() => {
+    let active = true;
+
+    if (creationMode !== "copy" || !isValidDayMonth(copyForm.startDate)) {
+      setCopyPublicSlug(copyBasePublicSlug);
+      setCopySlugLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    setCopySlugLoading(true);
+    resolveUniquePublicSlug("copy_plannings", copyBasePublicSlug)
+      .then((slug) => {
+        if (active) {
+          setCopyPublicSlug(slug);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setCopyPublicSlug(copyBasePublicSlug);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setCopySlugLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [copyBasePublicSlug, copyForm.startDate, creationMode]);
+
+  useEffect(() => {
+    let active = true;
+
+    if (
+      creationMode !== "visual" ||
+      !isValidDayMonth(visualForm.startDate) ||
+      !isValidDayMonth(visualForm.endDate)
+    ) {
+      setVisualPublicSlug(visualBasePublicSlug);
+      setVisualSlugLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    setVisualSlugLoading(true);
+    resolveUniquePublicSlug("visual_presentations", visualBasePublicSlug)
+      .then((slug) => {
+        if (active) {
+          setVisualPublicSlug(slug);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setVisualPublicSlug(visualBasePublicSlug);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setVisualSlugLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [creationMode, visualBasePublicSlug, visualForm.endDate, visualForm.startDate]);
   const isPlanningFilterActive =
     Boolean(planningSearch.trim()) || planningMonth !== "all" || planningSort !== "recent";
   const isPresentationFilterActive =
@@ -671,10 +833,11 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
     return [...visualPresentations]
       .filter((presentation) => {
         const month = monthTagFromDayMonth(presentation.start_display_date);
-        const type = normalizePresentationType(presentation.presentation_type);
-        const typeLabel = getPresentationTypeLabel(presentation.presentation_type);
+        const rawType = visualPresentationTypeValue(presentation);
+        const type = normalizePresentationType(rawType);
+        const typeLabel = getPresentationTypeLabel(rawType);
         const searchableText = normalizedSearch(
-          `${presentation.title} ${presentation.public_slug} ${presentation.presentation_type ?? ""} ${typeLabel}`,
+          `${presentation.title} ${presentation.public_slug} ${rawType ?? ""} ${typeLabel}`,
         );
         const matchesSearch = !search || searchableText.includes(search);
         const matchesMonth = presentationMonth === "all" || month === presentationMonth;
@@ -786,10 +949,24 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
     setSavingCopy(true);
     setError(null);
 
+    let uniquePublicSlug = copyPublicSlug || copyBasePublicSlug;
+
+    try {
+      uniquePublicSlug = await resolveUniquePublicSlug("copy_plannings", copyBasePublicSlug);
+    } catch (requestError) {
+      setError(
+        `Erro ao gerar link publico: ${
+          requestError instanceof Error ? requestError.message : "tente novamente."
+        }`,
+      );
+      setSavingCopy(false);
+      return;
+    }
+
     const newPlanning = {
       client_id: clientId,
       title: copyPlanningTitle,
-      public_slug: copyPublicSlug,
+      public_slug: uniquePublicSlug,
       period_label: buildPeriodLabel(copyForm.startDate, copyForm.endDate),
       start_display_date: copyForm.startDate,
       end_display_date: copyForm.endDate,
@@ -837,7 +1014,9 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
       return;
     }
 
-    if (!visualForm.presentationType) {
+    const presentationTypeValue = normalizePresentationTypeForSave(visualForm.presentationType);
+
+    if (!presentationTypeValue) {
       setCreationError("Selecione o tipo da apresentacao.");
       return;
     }
@@ -845,14 +1024,27 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
     setSavingVisual(true);
     setCreationError(null);
 
-    const newPresentation = {
+    let uniquePublicSlug = visualPublicSlug || visualBasePublicSlug;
+
+    try {
+      uniquePublicSlug = await resolveUniquePublicSlug("visual_presentations", visualBasePublicSlug);
+    } catch (requestError) {
+      setCreationError(
+        `Erro ao gerar link publico: ${
+          requestError instanceof Error ? requestError.message : "tente novamente."
+        }`,
+      );
+      setSavingVisual(false);
+      return;
+    }
+
+    const newPresentationBase = {
       client_id: clientId,
       title: visualPresentationTitle,
-      public_slug: visualPublicSlug,
+      public_slug: uniquePublicSlug,
       period_label: buildPeriodLabel(visualForm.startDate, visualForm.endDate),
       start_display_date: visualForm.startDate,
       end_display_date: visualForm.endDate,
-      presentation_type: visualForm.presentationType || "weekly",
       detail_color: client?.primary_color || "#DFFF06",
       status: "draft",
       is_public: true,
@@ -860,7 +1052,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
 
     const { data, error: requestError } = await supabase
       .from("visual_presentations")
-      .insert(newPresentation as never)
+      .insert({ ...newPresentationBase, presentation_type: presentationTypeValue } as never)
       .select("id")
       .maybeSingle();
 
@@ -1043,7 +1235,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
             className="h-14 w-14 text-lg md:h-16 md:w-16 md:text-xl"
           />
           <div className="min-w-0">
-            <h1 className="mt-1 truncate text-2xl font-medium text-foreground md:text-3xl">{client.name}</h1>
+            <h1 className="sora-heading mt-1 truncate text-2xl font-medium text-foreground md:text-3xl">{client.name}</h1>
             <p className="mt-1 truncate text-xs text-muted-foreground md:mt-2 md:text-sm">
               /{client.slug} - criado em {formatDateBR(client.created_at)}
             </p>
@@ -1098,7 +1290,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
         <TabsContent value="planejamentos" className="space-y-5">
           <div className="flex items-start justify-between gap-3">
             <div className="shrink-0">
-              <h2 className="text-xl font-medium text-foreground">Planejamentos</h2>
+              <h2 className="sora-heading text-xl font-medium text-foreground">Planejamentos</h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 {planningCounterText}
               </p>
@@ -1246,7 +1438,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                     <DocumentThumbnail title={planning.title} preview={previewText} accentColor={accentColor} />
                     <div className="space-y-2 px-1 pb-1 pt-3 sm:space-y-3 sm:pt-4">
                       <div className="flex items-start justify-between gap-2">
-                        <h3 className="line-clamp-2 text-sm font-medium leading-snug text-foreground sm:text-base">
+                        <h3 className="sora-heading line-clamp-2 text-sm font-medium leading-snug text-foreground sm:text-base">
                           {planning.title}
                         </h3>
                       </div>
@@ -1321,7 +1513,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
         <TabsContent value="apresentacoes" className="space-y-5">
           <div className="flex items-start justify-between gap-3">
             <div className="shrink-0">
-              <h2 className="text-xl font-medium text-foreground">Apresentacoes</h2>
+              <h2 className="sora-heading text-xl font-medium text-foreground">Apresentacoes</h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 {presentationCounterText}
               </p>
@@ -1380,9 +1572,11 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                         className={cn("flex h-10 rounded-md border px-3 py-2 text-sm", compactControlClass)}
                       >
                         <option value="all">Todos os tipos</option>
-                        <option value="weekly">Semanal</option>
-                        <option value="biweekly">Quinzenal</option>
-                        <option value="custom">Personalizada</option>
+                        {visualPresentationTypeOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
                       </select>
                       <select
                         value={presentationSort}
@@ -1458,7 +1652,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                 const publicPath = `/a/${presentation.public_slug}`;
                 const detailColor = accentColor;
                 const presentationMonthTag = monthTagFromDayMonth(presentation.start_display_date);
-                const presentationTypeTag = getPresentationTypeLabel(presentation.presentation_type).toUpperCase();
+                const presentationTypeTag = getPresentationTypeLabel(visualPresentationTypeValue(presentation)).toUpperCase();
 
                 return (
                   <article
@@ -1481,7 +1675,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                     />
                     <div className="space-y-2 px-1 pb-1 pt-3 sm:space-y-3 sm:pt-4">
                       <div className="flex items-start justify-between gap-2">
-                        <h3 className="line-clamp-2 text-sm font-medium leading-snug text-foreground sm:text-base">
+                        <h3 className="sora-heading line-clamp-2 text-sm font-medium leading-snug text-foreground sm:text-base">
                           {presentation.title}
                         </h3>
                       </div>
@@ -1642,9 +1836,11 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                 className={cn("flex h-11 rounded-md border px-3 py-2 text-sm", compactControlClass)}
               >
                 <option value="all">Todos os tipos</option>
-                <option value="weekly">Semanal</option>
-                <option value="biweekly">Quinzenal</option>
-                <option value="custom">Personalizada</option>
+                {visualPresentationTypeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
               <select
                 value={presentationSort}
@@ -1683,7 +1879,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4">
-              <h2 className="text-2xl font-medium text-foreground">
+              <h2 className="sora-heading text-2xl font-medium text-foreground">
                 Editar perfil do cliente
               </h2>
               <Button
@@ -1796,7 +1992,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-medium text-foreground">
+                <h2 className="sora-heading text-2xl font-medium text-foreground">
                   {creationMode === "copy" ? "Criar planejamento" : "Criar apresentacao"}
                 </h2>
               </div>
@@ -1849,7 +2045,9 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                 </div>
                 <p className="rounded-md border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
                   Link publico sera:{" "}
-                  <span className="font-medium text-foreground">{copyPublicSlug}</span>
+                  <span className="font-medium text-foreground">
+                    {copySlugLoading ? "verificando..." : copyPublicSlug || copyBasePublicSlug}
+                  </span>
                 </p>
                 {error ? (
                   <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-200">
@@ -1878,10 +2076,11 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                       value={visualForm.startDate}
                       className={creationError?.startsWith("Data inicial") ? "border-rose-500 focus-visible:ring-rose-500" : undefined}
                       onChange={(event) =>
-                        setVisualForm((current) => ({
-                          ...current,
-                          startDate: formatDateInput(event.target.value),
-                        }))
+                        setVisualForm((current) =>
+                          withSuggestedVisualEndDate(current, {
+                            startDate: formatDateInput(event.target.value),
+                          }),
+                        )
                       }
                       placeholder="15/05"
                     />
@@ -1912,7 +2111,9 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                 </div>
                 <p className="rounded-md border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
                   Link publico sera:{" "}
-                  <span className="font-medium text-foreground">{visualPublicSlug}</span>
+                  <span className="font-medium text-foreground">
+                    {visualSlugLoading ? "verificando..." : visualPublicSlug || visualBasePublicSlug}
+                  </span>
                 </p>
                 <div className="space-y-2">
                   <div className="space-y-2">
@@ -1921,16 +2122,19 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                       id="visualType"
                       value={visualForm.presentationType}
                       onChange={(event) =>
-                        setVisualForm((current) => ({
-                          ...current,
-                          presentationType: event.target.value,
-                        }))
+                        setVisualForm((current) =>
+                          withSuggestedVisualEndDate(current, {
+                            presentationType: event.target.value,
+                          }),
+                        )
                       }
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground transition-colors focus-visible:border-neutral-400 focus-visible:outline-none focus-visible:ring-0 dark:focus-visible:border-white/35"
                     >
-                      <option value="weekly">Semanal</option>
-                      <option value="biweekly">Quinzenal</option>
-                      <option value="custom">Personalizada</option>
+                      {visualPresentationTypeOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>

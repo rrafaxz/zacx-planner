@@ -10,7 +10,7 @@ export type VisualTheme = "dark" | "light";
 const storageKey = "zacx-visual-theme";
 
 export function useVisualTheme() {
-  const [theme, setTheme] = useState<VisualTheme>("dark");
+  const [theme, setTheme] = useState<VisualTheme>("light");
 
   useEffect(() => {
     const storedTheme = window.localStorage.getItem(storageKey);

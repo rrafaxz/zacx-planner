@@ -407,7 +407,7 @@ export function PlanningVisualBoard({
               <div className="flex flex-1 flex-col justify-center p-3 sm:p-5 md:p-6">
                 <div className="grid place-items-center">
                   <span
-                    className="text-center text-lg font-semibold tracking-normal sm:text-2xl md:text-[1.7rem]"
+                    className="sora-heading text-center text-lg font-semibold tracking-normal sm:text-2xl md:text-[1.7rem]"
                     style={{ color: typeTextColor }}
                   >
                     {item.typeLabel}
@@ -443,7 +443,7 @@ export function PlanningVisualBoard({
                     ? `${displayWeekday(selectedItem)} | ${selectedItem.displayDate || selectedItem.date}`
                     : selectedItem.displayDate || selectedItem.date}
                 </p>
-                <h3 className="mt-4 text-2xl font-semibold tracking-normal text-foreground sm:text-3xl">
+                <h3 className="sora-heading mt-4 text-2xl font-semibold tracking-normal text-foreground sm:text-3xl">
                   {selectedItem.typeLabel}
                 </h3>
               </div>
@@ -696,7 +696,7 @@ export function PlanningVisualBoard({
                   <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: selectedColors.detail }} />
                   <p className="text-sm font-medium text-muted-foreground">Salvar no documento</p>
                 </div>
-                <h4 className="text-xl font-semibold text-foreground">
+                <h4 className="sora-heading text-xl font-semibold text-foreground">
                   Deseja salvar estas alterações no documento original?
                 </h4>
                 <div className="mt-6 flex justify-end gap-3">

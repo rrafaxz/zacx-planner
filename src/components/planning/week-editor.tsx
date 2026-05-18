@@ -536,7 +536,7 @@ export function WeekEditor({ weekId }: WeekEditorProps) {
               <span className="text-neutral-700">/</span>
               <span>{periodLabel(week.start_date, week.end_date)}</span>
             </div>
-            <h1 className="mt-2 text-2xl font-semibold text-white md:text-4xl">{week.title}</h1>
+            <h1 className="sora-heading mt-2 text-2xl font-semibold text-white md:text-4xl">{week.title}</h1>
           </div>
         </div>
       </div>
@@ -674,7 +674,7 @@ export function WeekEditor({ weekId }: WeekEditorProps) {
                               {item.type || "post"}
                             </span>
                           </div>
-                          <h3 className="mt-3 text-lg font-semibold leading-6 text-white">
+                          <h3 className="sora-heading mt-3 text-lg font-semibold leading-6 text-white">
                             {item.title || "Sem titulo"}
                           </h3>
                           <div className="mt-4 grid gap-3 text-sm leading-6 text-muted-foreground md:grid-cols-3">

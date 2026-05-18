@@ -175,7 +175,7 @@ export function PublicPlanningView({ slug }: PublicPlanningViewProps) {
           <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-sm text-muted-foreground">{client?.name || "Cliente"}</p>
-              <h1 className="mt-2 text-3xl font-semibold text-white md:text-5xl">{week.title}</h1>
+              <h1 className="sora-heading mt-2 text-3xl font-semibold text-white md:text-5xl">{week.title}</h1>
               <p className="mt-4 text-sm text-muted-foreground">
                 {periodLabel(week.start_date, week.end_date)}
               </p>

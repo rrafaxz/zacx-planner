@@ -45,14 +45,14 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen bg-white text-zinc-950 dark:bg-zinc-950 dark:text-white flex items-center justify-center px-5">
-      <section className="w-full max-w-sm rounded-3xl border border-black/10 dark:border-white/10 p-6 bg-white dark:bg-zinc-950">
+    <main className="min-h-screen bg-white text-zinc-950 dark:bg-background dark:text-white flex items-center justify-center px-5">
+      <section className="w-full max-w-sm rounded-3xl border border-black/10 dark:border-white/10 p-6 bg-white dark:bg-background">
         <div className="mb-8 text-center">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#1D10D7] text-white dark:bg-[#DFFF06] dark:text-black font-bold text-xl">
             Z
           </div>
 
-          <h1 className="text-2xl font-semibold tracking-tight">
+          <h1 className="sora-heading text-2xl font-semibold tracking-tight">
             Acesso interno
           </h1>
 

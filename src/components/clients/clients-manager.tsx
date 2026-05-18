@@ -214,7 +214,7 @@ export function ClientsManager() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm text-muted-foreground">Clientes</p>
-          <h1 className="mt-2 text-2xl font-medium text-foreground md:text-4xl">
+          <h1 className="sora-heading mt-2 text-2xl font-medium text-foreground md:text-4xl">
             Biblioteca de clientes
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground md:mt-3">
@@ -286,7 +286,7 @@ export function ClientsManager() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-sm text-muted-foreground">Novo perfil</p>
-                <h2 className="mt-1 text-2xl font-medium text-foreground">Criar cliente</h2>
+                <h2 className="sora-heading mt-1 text-2xl font-medium text-foreground">Criar cliente</h2>
               </div>
               <Button type="button" variant="ghostSecondary" size="icon" onClick={closeModal} disabled={saving || uploadingLogo}>
                 <X className="h-4 w-4" />

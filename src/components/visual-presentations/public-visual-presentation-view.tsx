@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import { PublicClientHeading } from "@/components/public-view/public-client-heading";
@@ -10,8 +10,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import {
   fullWeekday,
   VisualItemBoard,
+  type VisualArtworkImage,
   type VisualItemWithImages,
 } from "@/components/visual-presentations/visual-item-board";
+import {
+  buildVisualPresentationWeeks,
+  filterVisualItemsForWeek,
+  type VisualPresentationWeek,
+} from "@/components/visual-presentations/visual-presentation-weeks";
 import { supabase } from "@/lib/supabase/client";
 import type { Client, VisualItemImage, VisualPresentation } from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
@@ -47,6 +53,15 @@ function mapImagesToItems(items: VisualItemWithImages[], images: VisualItemImage
     ...item,
     images: imagesByItem.get(item.id) ?? [],
   }));
+}
+
+function visualItemMode(item?: VisualItemWithImages | null) {
+  const format = `${item?.format ?? ""}`.toLowerCase();
+
+  if (format.includes("stories") || format.includes("story")) return "stories";
+  if (format.includes("carousel") || format.includes("carrossel")) return "carousel";
+
+  return "post";
 }
 
 function NotFoundState() {
@@ -117,13 +132,108 @@ function PresentationItemHeader({
   );
 }
 
+function PublicVisualItemSection({
+  groupKey,
+  groupItems,
+  featuredItem,
+  client,
+  theme,
+  presentation,
+  primaryColor,
+  primaryTextColor,
+  secondaryColor,
+  secondaryTextColor,
+}: {
+  groupKey: string;
+  groupItems: VisualItemWithImages[];
+  featuredItem?: VisualItemWithImages;
+  client: Client | null;
+  theme: "dark" | "light";
+  presentation: VisualPresentation;
+  primaryColor: string;
+  primaryTextColor: string;
+  secondaryColor: string;
+  secondaryTextColor: string;
+}) {
+  const [activeImage, setActiveImage] = useState<VisualArtworkImage | null>(null);
+  const firstItem = groupItems[0] || featuredItem;
+  const isStories = visualItemMode(firstItem) === "stories";
+  const displayDate = isStories
+    ? activeImage?.display_date || firstItem?.display_date || presentation.period_label
+    : firstItem?.display_date || presentation.period_label;
+  const weekday = isStories ? activeImage?.weekday || firstItem?.weekday : firstItem?.weekday;
+
+  return (
+    <section key={groupKey} className="space-y-5 md:space-y-10">
+      <PresentationItemHeader
+        displayDate={displayDate}
+        weekday={weekday}
+        dateColor={primaryColor}
+        dateTextColor={primaryTextColor}
+        weekdayColor={secondaryColor}
+        weekdayTextColor={secondaryTextColor}
+      />
+      <VisualItemBoard
+        items={groupItems}
+        client={client}
+        variant="public"
+        theme={theme}
+        onActiveImageChange={setActiveImage}
+      />
+    </section>
+  );
+}
+
+function PublicWeekSelection({
+  weeks,
+  items,
+  onSelectWeek,
+}: {
+  weeks: VisualPresentationWeek[];
+  items: VisualItemWithImages[];
+  onSelectWeek: (weekId: string) => void;
+}) {
+  return (
+    <section className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {weeks.map((week) => {
+        const itemCount = filterVisualItemsForWeek(items, week).length;
+
+        return (
+          <button
+            key={week.id}
+            type="button"
+            onClick={() => onSelectWeek(week.id)}
+            className="rounded-xl border border-dashed border-border bg-background px-4 py-5 text-left transition-colors hover:border-foreground/35 hover:bg-foreground/[0.02]"
+          >
+            <span className="sora-heading block text-sm font-semibold uppercase text-foreground">{week.actionLabel}</span>
+            <span className="mt-1 block text-xs text-muted-foreground">{week.periodLabel}</span>
+            <span className="mt-3 inline-flex rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground">
+              {itemCount} {itemCount === 1 ? "item" : "itens"}
+            </span>
+          </button>
+        );
+      })}
+    </section>
+  );
+}
+
 export function PublicVisualPresentationView({ slug }: PublicVisualPresentationViewProps) {
   const [presentation, setPresentation] = useState<VisualPresentation | null>(null);
   const [client, setClient] = useState<Client | null>(null);
   const [items, setItems] = useState<VisualItemWithImages[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedWeekId, setSelectedWeekId] = useState<string | null>(null);
   const { theme, isLight } = useTheme();
+  const presentationWeeks = useMemo(
+    () => (presentation ? buildVisualPresentationWeeks(presentation) : []),
+    [presentation],
+  );
+  const shouldShowWeekSelection = presentationWeeks.length > 1;
+  const selectedWeek = shouldShowWeekSelection
+    ? presentationWeeks.find((week) => week.id === selectedWeekId) ?? null
+    : presentationWeeks[0] ?? null;
+  const visibleItems = selectedWeek ? filterVisualItemsForWeek(items, selectedWeek) : items;
 
   async function loadPresentation() {
     setLoading(true);
@@ -193,6 +303,10 @@ export function PublicVisualPresentationView({ slug }: PublicVisualPresentationV
     loadPresentation();
   }, [slug]);
 
+  useEffect(() => {
+    setSelectedWeekId(null);
+  }, [slug]);
+
   if (loading) {
     return (
       <main
@@ -218,7 +332,7 @@ export function PublicVisualPresentationView({ slug }: PublicVisualPresentationV
     return <NotFoundState />;
   }
 
-  const featuredItem = items[0];
+  const featuredItem = visibleItems[0] ?? items[0];
   const primaryColor = client?.primary_color || "#DFFF06";
   const secondaryColor = client?.secondary_color || primaryColor;
   const primaryTextColor = textColorForBackground(primaryColor);
@@ -241,40 +355,59 @@ export function PublicVisualPresentationView({ slug }: PublicVisualPresentationV
           </Card>
         ) : null}
 
+        {shouldShowWeekSelection && !selectedWeek ? (
+          <PublicWeekSelection
+            weeks={presentationWeeks}
+            items={items}
+            onSelectWeek={setSelectedWeekId}
+          />
+        ) : (
         <section className="mt-5 md:mt-6">
-          {items.length ? (
-            <div className="space-y-10 md:space-y-24">
-              {groupVisualItems(items).map((group) => {
-                const firstItem = group.items[0] || featuredItem;
+          {shouldShowWeekSelection && selectedWeek ? (
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="sora-heading text-base font-semibold text-foreground">{selectedWeek.label}</h2>
+                <p className="text-xs text-muted-foreground">{selectedWeek.periodLabel}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedWeekId(null)}
+                className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              >
+                ← Voltar para semanas
+              </button>
+            </div>
+          ) : null}
 
+          {visibleItems.length ? (
+            <div className="space-y-10 md:space-y-24">
+              {groupVisualItems(visibleItems).map((group) => {
                 return (
-                  <section key={group.key} className="space-y-5 md:space-y-10">
-                    <PresentationItemHeader
-                      displayDate={firstItem?.display_date || presentation.period_label}
-                      weekday={firstItem?.weekday}
-                      dateColor={primaryColor}
-                      dateTextColor={primaryTextColor}
-                      weekdayColor={secondaryColor}
-                      weekdayTextColor={secondaryTextColor}
-                    />
-                    <VisualItemBoard
-                      items={group.items}
-                      client={client}
-                      variant="public"
-                      theme={theme}
-                    />
-                  </section>
+                  <PublicVisualItemSection
+                    key={group.key}
+                    groupKey={group.key}
+                    groupItems={group.items}
+                    featuredItem={featuredItem}
+                    client={client}
+                    theme={theme}
+                    presentation={presentation}
+                    primaryColor={primaryColor}
+                    primaryTextColor={primaryTextColor}
+                    secondaryColor={secondaryColor}
+                    secondaryTextColor={secondaryTextColor}
+                  />
                 );
               })}
             </div>
           ) : (
             <Card>
               <CardContent className="pt-5 text-sm text-muted-foreground">
-                Nenhuma arte foi enviada para esta apresentacao ainda.
+                Nenhuma arte foi enviada para esta semana ainda.
               </CardContent>
             </Card>
           )}
         </section>
+        )}
 
       </section>
     </main>

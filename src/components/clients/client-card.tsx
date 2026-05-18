@@ -28,7 +28,7 @@ export function ClientCard({ client }: ClientCardProps) {
             )}
           </div>
 
-          <h2 className="mt-3 line-clamp-2 text-sm font-medium leading-snug text-foreground sm:mt-4 sm:text-lg">
+          <h2 className="sora-heading mt-3 line-clamp-2 text-sm font-medium leading-snug text-foreground sm:mt-4 sm:text-lg">
             {client.name}
           </h2>
           <p className="mt-1 max-w-full truncate text-xs text-muted-foreground sm:text-sm">/{client.slug}</p>

@@ -8,15 +8,12 @@ import {
   ChevronLeft,
   ChevronRight,
   Menu,
-  Moon,
-  Sun,
   UsersRound,
   X,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { PwaInstallButton } from "@/components/pwa-install-button";
-import { useTheme } from "@/components/theme/theme-provider";
 import { ZacxLogo } from "@/components/zacx-logo";
 import { ZacxMark } from "@/components/zacx-mark";
 import { cn } from "@/lib/utils";
@@ -28,7 +25,6 @@ const navItems = [
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { theme, isLight, toggleTheme } = useTheme();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -69,19 +65,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <ZacxLogo className="h-5 w-auto max-w-[104px] text-[var(--zacx-brand)]" />
           </Link>
 
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className={cn(
-              "grid h-10 w-10 place-items-center rounded-lg border transition-colors",
-              isLight
-                ? "border-neutral-200 bg-background text-neutral-950 hover:bg-foreground/[0.05]"
-                : "border-white/10 bg-background text-white hover:bg-white/[0.06]",
-            )}
-            aria-label="Alternar tema"
-          >
-            {theme === "dark" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-          </button>
+          <div aria-hidden="true" />
         </div>
 
         {isMobileMenuOpen ? (

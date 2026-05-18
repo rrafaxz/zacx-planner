@@ -1,17 +1,43 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { DragEvent, FormEvent } from "react";
 import Link from "next/link";
-import { Archive, ArrowLeft, Clipboard, ExternalLink, ImagePlus, Plus, X } from "lucide-react";
+import {
+  Archive,
+  ArrowLeft,
+  Clipboard,
+  ExternalLink,
+  ImageIcon,
+  ImagePlus,
+  Info,
+  Plus,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  fullWeekday,
   VisualItemBoard,
+  type VisualArtworkImage,
   type VisualItemWithImages,
 } from "@/components/visual-presentations/visual-item-board";
+import {
+  buildStoryImageNotes,
+  storyImageMetadata,
+} from "@/components/visual-presentations/story-image-notes";
+import {
+  buildVisualPresentationWeeks,
+  dateLabelForWeekOffset,
+  filterVisualItemsForWeek,
+  isDayMonthInVisualWeek,
+  type VisualPresentationWeek,
+} from "@/components/visual-presentations/visual-presentation-weeks";
 import { useTheme } from "@/components/theme/theme-provider";
 import { formatDateInput, getDayMonthInputError } from "@/lib/date-mask";
 import { optimizeImage } from "@/lib/image-optimizer";
@@ -25,11 +51,30 @@ type VisualPresentationEditorProps = {
 
 type VisualFormat = "post" | "carousel" | "stories";
 
+type StoryDraftImage = {
+  draftId: string;
+  file: File;
+  date: string;
+  weekday: string;
+};
+
 type VisualPublicationForm = {
   format: VisualFormat;
   weekday: string;
   date: string;
   imageFiles: File[];
+  storyImages: StoryDraftImage[];
+};
+
+type EditImageDraft = {
+  draftId: string;
+  imageId?: string;
+  imageUrl?: string | null;
+  imagePath?: string | null;
+  file?: File;
+  date: string;
+  weekday: string;
+  orderIndex: number;
 };
 
 type EditPublicationForm = {
@@ -37,7 +82,19 @@ type EditPublicationForm = {
   format: VisualFormat;
   weekday: string;
   date: string;
+  imageDrafts: EditImageDraft[];
 };
+
+type DragIndexState = {
+  fromIndex: number;
+  dropIndex: number;
+};
+
+type VisualItemDragState = DragIndexState & {
+  itemId: string;
+};
+
+type EditorMode = "visual" | "edit";
 
 const weekdays = ["SEG", "TER", "QUA", "QUI", "SEX", "SÁB", "DOM"];
 const visualPresentationsBucket = "visual-presentations";
@@ -46,11 +103,18 @@ const legacyPresentationAssetsBucket = "presentation-assets";
 const publicationTypes: Array<{
   format: VisualFormat;
   label: string;
+  description: string;
 }> = [
-  { format: "post", label: "Post" },
-  { format: "carousel", label: "Carrossel" },
-  { format: "stories", label: "Stories" },
+  { format: "post", label: "Post", description: "1 imagem" },
+  { format: "carousel", label: "Carrossel", description: "ate 20 imagens" },
+  { format: "stories", label: "Stories", description: "ate 14 imagens" },
 ];
+
+const formatLimits: Record<VisualFormat, number> = {
+  post: 1,
+  carousel: 20,
+  stories: 14,
+};
 
 function initialPublicationForm(format: VisualFormat): VisualPublicationForm {
   return {
@@ -58,7 +122,37 @@ function initialPublicationForm(format: VisualFormat): VisualPublicationForm {
     weekday: "SEG",
     date: "",
     imageFiles: [],
+    storyImages: [],
   };
+}
+
+function newDraftId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function imageFilesFromList(files: FileList | File[] | null | undefined) {
+  return Array.from(files ?? []).filter((file) => file.type.startsWith("image/"));
+}
+
+function storyDraftsFromFiles(files: File[], week?: VisualPresentationWeek | null, startOffset = 0) {
+  return files.map((file, index) => ({
+    draftId: newDraftId(),
+    file,
+    date: dateLabelForWeekOffset(week, startOffset + index),
+    weekday: "SEG",
+  }));
+}
+
+function sortImagesByOrder(images?: VisualItemImage[]) {
+  return [...(images ?? [])].sort(
+    (left, right) =>
+      (left.order_index ?? 0) - (right.order_index ?? 0) ||
+      `${left.created_at ?? ""}`.localeCompare(`${right.created_at ?? ""}`),
+  );
 }
 
 function nextOrderIndex(items: Array<{ order_index: number | null }>) {
@@ -111,8 +205,76 @@ function visualFormatFromValue(value?: string | null): VisualFormat {
   return "post";
 }
 
+function normalizeWeekdayValue(value?: string | null) {
+  const normalizedValue = `${value ?? ""}`
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if (normalizedValue.startsWith("SEG")) return "SEG";
+  if (normalizedValue.startsWith("TER")) return "TER";
+  if (normalizedValue.startsWith("QUA")) return "QUA";
+  if (normalizedValue.startsWith("QUI")) return "QUI";
+  if (normalizedValue.startsWith("SEX")) return "SEX";
+  if (normalizedValue.startsWith("SAB")) return "SÁB";
+  if (normalizedValue.startsWith("DOM")) return "DOM";
+
+  return "SEG";
+}
+
 function dateFromDisplayDate(value?: string | null) {
   return formatDateInput(value || "");
+}
+
+function reorderCollection<T>(collection: T[], fromIndex: number, toIndex: number) {
+  if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= collection.length || toIndex >= collection.length) {
+    return collection;
+  }
+
+  const reordered = [...collection];
+  const [moved] = reordered.splice(fromIndex, 1);
+
+  reordered.splice(toIndex, 0, moved);
+  return reordered;
+}
+
+function clampIndex(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function dragInsertIndex(
+  event: DragEvent<HTMLElement>,
+  fromIndex: number,
+  targetIndex: number,
+  totalItems: number,
+) {
+  const rect = event.currentTarget.getBoundingClientRect();
+  const verticalDistance = Math.abs(event.clientY - (rect.top + rect.height / 2));
+  const horizontalDistance = Math.abs(event.clientX - (rect.left + rect.width / 2));
+  const useHorizontalAxis = horizontalDistance > verticalDistance && rect.width > rect.height * 0.65;
+  const isAfter = useHorizontalAxis
+    ? event.clientX > rect.left + rect.width / 2
+    : event.clientY > rect.top + rect.height / 2;
+  let insertIndex = targetIndex + (isAfter ? 1 : 0);
+
+  if (fromIndex < insertIndex) {
+    insertIndex -= 1;
+  }
+
+  return clampIndex(insertIndex, 0, Math.max(totalItems - 1, 0));
+}
+
+function shouldIgnoreImageDrag(target: EventTarget | null) {
+  return target instanceof HTMLElement
+    ? Boolean(target.closest("button,input,select,textarea,label,a,[data-no-image-drag='true']"))
+    : false;
+}
+
+function isNativeUndoTarget(target: EventTarget | null) {
+  return target instanceof HTMLElement
+    ? Boolean(target.closest("input,textarea,select,[contenteditable='true'],[data-native-undo='true']"))
+    : false;
 }
 
 function WeekdayControl({
@@ -146,6 +308,271 @@ function WeekdayControl({
   );
 }
 
+function AddFormatCard({
+  format,
+  label,
+  description,
+  active,
+  onFiles,
+}: {
+  format: VisualFormat;
+  label: string;
+  description: string;
+  active: boolean;
+  onFiles: (files: File[]) => void;
+}) {
+  const inputId = `add-${format}-images`;
+  const shapeClass = format === "stories" ? "aspect-[9/16]" : "aspect-[4/5]";
+
+  function handleDrop(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    event.currentTarget.classList.remove("border-foreground/40");
+    onFiles(imageFilesFromList(event.dataTransfer.files));
+  }
+
+  return (
+    <label
+      htmlFor={inputId}
+      onDragOver={(event) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+        event.currentTarget.classList.add("border-foreground/40");
+      }}
+      onDragLeave={(event) => event.currentTarget.classList.remove("border-foreground/40")}
+      onDrop={handleDrop}
+      className={cn(
+        "group relative flex min-w-[132px] cursor-pointer flex-col justify-center rounded-2xl border border-dashed border-border bg-background p-3 text-center transition-colors hover:border-foreground/40 hover:bg-foreground/[0.03] md:min-w-0",
+        active && "border-foreground/50 bg-foreground/[0.04]",
+      )}
+    >
+      <input
+        id={inputId}
+        type="file"
+        accept="image/*"
+        multiple={format !== "post"}
+        className="sr-only"
+        onChange={(event) => {
+          onFiles(imageFilesFromList(event.target.files));
+          event.currentTarget.value = "";
+        }}
+      />
+      <div
+        className={cn(
+          "mx-auto grid w-full max-w-[118px] place-items-center rounded-xl border border-dashed border-border bg-background transition-colors group-hover:border-foreground/40",
+          "relative",
+          shapeClass,
+          format === "carousel" &&
+            "before:absolute before:inset-x-5 before:top-4 before:h-1 before:rounded-full before:bg-foreground/15",
+        )}
+      >
+        <div className="grid h-11 w-11 place-items-center rounded-full border border-border bg-background text-foreground transition-colors group-hover:border-foreground/40">
+          <Plus className="h-5 w-5" />
+        </div>
+      </div>
+      <span className="sora-heading mt-3 text-sm font-medium text-foreground">{label}</span>
+      <span className="mt-1 text-[11px] text-muted-foreground">{description}</span>
+    </label>
+  );
+}
+
+function ReplaceableImageFrame({
+  inputId,
+  previewUrl,
+  alt,
+  index,
+  aspectClass,
+  onReplace,
+  onRemove,
+}: {
+  inputId: string;
+  previewUrl?: string | null;
+  alt: string;
+  index: number;
+  aspectClass: string;
+  onReplace: (files: File[]) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className={cn("group relative overflow-hidden rounded-lg border border-border bg-background", aspectClass)}>
+      <input
+        id={inputId}
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        data-no-image-drag="true"
+        onChange={(event) => {
+          onReplace(imageFilesFromList(event.target.files));
+          event.currentTarget.value = "";
+        }}
+      />
+      {previewUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={previewUrl}
+          alt={alt}
+          draggable={false}
+          className="h-full w-full object-contain"
+        />
+      ) : (
+        <div className="grid h-full place-items-center text-xs text-muted-foreground">
+          Sem imagem
+        </div>
+      )}
+      <span className="pointer-events-none absolute left-2 top-2 z-20 grid h-7 w-7 place-items-center rounded-md bg-black/75 text-xs font-medium text-white">
+        {index + 1}
+      </span>
+      <Button
+        type="button"
+        variant="ghostSecondary"
+        size="icon"
+        data-no-image-drag="true"
+        className="absolute right-2 top-2 z-20 h-7 w-7 rounded-md bg-black/60 text-white hover:bg-black/75 hover:text-white"
+        onClick={onRemove}
+        aria-label="Remover imagem"
+        title="Remover imagem"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </Button>
+      <label
+        htmlFor={inputId}
+        data-no-image-drag="true"
+        className="absolute inset-0 z-10 grid cursor-pointer place-items-center bg-black/20 text-white opacity-100 transition duration-200 md:bg-black/0 md:opacity-0 md:group-hover:bg-black/35 md:group-hover:opacity-100"
+        aria-label="Substituir imagem"
+        title="Substituir imagem"
+      >
+        <span className="grid h-10 w-10 place-items-center rounded-full border border-white/30 bg-black/45">
+          <ImageIcon className="h-5 w-5" />
+        </span>
+      </label>
+    </div>
+  );
+}
+
+function textColorForBackground(hexColor?: string | null) {
+  const color = hexColor?.replace("#", "");
+
+  if (!color || color.length !== 6) return "#0D0D0F";
+
+  const red = Number.parseInt(color.slice(0, 2), 16);
+  const green = Number.parseInt(color.slice(2, 4), 16);
+  const blue = Number.parseInt(color.slice(4, 6), 16);
+  const luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255;
+
+  return luminance > 0.55 ? "#0D0D0F" : "#FFFFFF";
+}
+
+function SectionTitleWithTooltip({
+  title,
+  tooltip,
+}: {
+  title: string;
+  tooltip: string;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <h2 className="sora-heading text-[15px] font-semibold text-foreground">{title}</h2>
+      <span className="group relative inline-grid h-6 w-6 place-items-center">
+        <Info className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+        <span className="pointer-events-none absolute left-1/2 top-7 z-[80] hidden w-64 -translate-x-1/2 rounded-md border border-neutral-200 bg-white px-3 py-2 text-left text-[11px] leading-relaxed text-neutral-900 group-hover:block">
+          {tooltip}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+function WeekSelectionGrid({
+  weeks,
+  selectedWeekId,
+  items,
+  onSelect,
+}: {
+  weeks: VisualPresentationWeek[];
+  selectedWeekId: string | null;
+  items: VisualItemWithImages[];
+  onSelect: (weekId: string) => void;
+}) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {weeks.map((week) => {
+        const isSelected = selectedWeekId === week.id;
+        const weekItemCount = filterVisualItemsForWeek(items, week).length;
+
+        return (
+          <button
+            key={week.id}
+            type="button"
+            onClick={() => onSelect(week.id)}
+            className={cn(
+              "rounded-xl border border-dashed bg-background px-4 py-5 text-left transition-colors hover:border-foreground/40 hover:bg-foreground/[0.02]",
+              isSelected
+                ? "border-[#1D10D7] bg-transparent dark:border-[#DFFF06]"
+                : "border-border",
+            )}
+          >
+            <span className="sora-heading block text-sm font-semibold uppercase text-foreground">
+              {week.actionLabel}
+            </span>
+            <span className="mt-1 block text-xs text-muted-foreground">{week.periodLabel}</span>
+            <span className="mt-3 inline-flex rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground">
+              {weekItemCount} {weekItemCount === 1 ? "item" : "itens"}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function VisualPreviewItemSection({
+  item,
+  client,
+  theme,
+  primaryColor,
+  secondaryColor,
+}: {
+  item: VisualItemWithImages;
+  client: Client | null;
+  theme: "dark" | "light";
+  primaryColor: string;
+  secondaryColor: string;
+}) {
+  const [activeImage, setActiveImage] = useState<VisualArtworkImage | null>(null);
+  const format = visualFormatFromValue(item.format);
+  const displayDate = format === "stories" ? activeImage?.display_date || item.display_date : item.display_date;
+  const weekday = format === "stories" ? activeImage?.weekday || item.weekday : item.weekday;
+  const [dateDay, dateMonth] = (displayDate || "--/--").split("/");
+  const primaryTextColor = textColorForBackground(primaryColor);
+  const secondaryTextColor = textColorForBackground(secondaryColor);
+
+  return (
+    <section className="space-y-5 md:space-y-10">
+      <div className="mx-auto grid w-full max-w-xl grid-cols-2 gap-2">
+        <div
+          className="flex h-12 items-center justify-center rounded-lg px-3 text-sm font-medium sm:h-14 md:text-base"
+          style={{ backgroundColor: primaryColor, color: primaryTextColor }}
+        >
+          <span>{dateDay || "--"}</span>
+          <span className="opacity-65">/{dateMonth || "--"}</span>
+        </div>
+        <div
+          className="flex h-12 items-center justify-center rounded-lg px-3 text-center text-xs font-medium uppercase sm:h-14 sm:text-sm md:text-base"
+          style={{ backgroundColor: secondaryColor, color: secondaryTextColor }}
+        >
+          {fullWeekday(weekday).toUpperCase()}
+        </div>
+      </div>
+      <VisualItemBoard
+        items={[item]}
+        client={client}
+        variant="public"
+        theme={theme}
+        onActiveImageChange={setActiveImage}
+      />
+    </section>
+  );
+}
+
 function mapImagesToItems(items: VisualItemWithImages[], images: VisualItemImage[]) {
   const imagesByItem = new Map<string, VisualItemImage[]>();
 
@@ -171,30 +598,98 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
   const [saving, setSaving] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
+  const [visualItemDrag, setVisualItemDrag] = useState<VisualItemDragState | null>(null);
+  const [reorderingItemId, setReorderingItemId] = useState<string | null>(null);
+  const [publicationImageDrag, setPublicationImageDrag] = useState<DragIndexState | null>(null);
+  const [editImageDrag, setEditImageDrag] = useState<DragIndexState | null>(null);
   const [archiving, setArchiving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [fileInputKey, setFileInputKey] = useState(0);
+  const [editFileInputKey, setEditFileInputKey] = useState(0);
+  const [editorMode, setEditorMode] = useState<EditorMode>("edit");
+  const [selectedWeekId, setSelectedWeekId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const itemsUndoStackRef = useRef<VisualItemWithImages[][]>([]);
+  const isRestoringUndoRef = useRef(false);
+  const itemsRef = useRef<VisualItemWithImages[]>([]);
+  const visualOrderChangedRef = useRef(false);
   const { theme } = useTheme();
 
   const surfaceClass = "bg-background text-foreground";
   const nestedSurfaceClass = "border-border bg-background text-foreground";
   const mutedTextClass = "text-muted-foreground";
+  const presentationWeeks = useMemo(
+    () => (presentation ? buildVisualPresentationWeeks(presentation) : []),
+    [presentation],
+  );
+  const selectedWeek =
+    presentationWeeks.find((week) => week.id === selectedWeekId) ?? presentationWeeks[0] ?? null;
+  const selectedWeekItems = useMemo(
+    () => filterVisualItemsForWeek(items, selectedWeek),
+    [items, selectedWeek],
+  );
   const selectedImagePreviews = useMemo(
     () =>
       form.imageFiles.map((file) => ({
+        id: file.name,
         name: file.name,
         url: URL.createObjectURL(file),
       })),
     [form.imageFiles],
   );
+  const selectedStoryPreviews = useMemo(
+    () =>
+      form.storyImages.map((story) => ({
+        id: story.draftId,
+        name: story.file.name,
+        url: URL.createObjectURL(story.file),
+      })),
+    [form.storyImages],
+  );
+  const editImagePreviews = useMemo(() => {
+    const previews = new Map<string, string>();
+
+    editForm?.imageDrafts.forEach((draft) => {
+      if (draft.file) {
+        previews.set(draft.draftId, URL.createObjectURL(draft.file));
+      }
+    });
+
+    return previews;
+  }, [editForm?.imageDrafts]);
 
   useEffect(() => {
     return () => {
       selectedImagePreviews.forEach((preview) => URL.revokeObjectURL(preview.url));
     };
   }, [selectedImagePreviews]);
+
+  useEffect(() => {
+    return () => {
+      selectedStoryPreviews.forEach((preview) => URL.revokeObjectURL(preview.url));
+    };
+  }, [selectedStoryPreviews]);
+
+  useEffect(() => {
+    return () => {
+      editImagePreviews.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [editImagePreviews]);
+
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
+  useEffect(() => {
+    if (!presentationWeeks.length) return;
+
+    setSelectedWeekId((currentWeekId) =>
+      currentWeekId && presentationWeeks.some((week) => week.id === currentWeekId)
+        ? currentWeekId
+        : presentationWeeks[0].id,
+    );
+  }, [presentationWeeks]);
 
   async function loadPresentation() {
     setLoading(true);
@@ -262,24 +757,227 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
 
   useEffect(() => {
     setOrigin(window.location.origin);
+    itemsUndoStackRef.current = [];
     loadPresentation();
   }, [presentationId]);
 
-  function openForm(format: VisualFormat) {
+  function cloneItemsSnapshot(sourceItems: VisualItemWithImages[]) {
+    return sourceItems.map((item) => ({
+      ...item,
+      images: item.images?.map((image) => ({ ...image })) ?? [],
+    }));
+  }
+
+  function pushItemsUndoSnapshot(sourceItems = items) {
+    itemsUndoStackRef.current = [
+      ...itemsUndoStackRef.current.slice(-19),
+      cloneItemsSnapshot(sourceItems),
+    ];
+  }
+
+  async function restoreItemsSnapshot(snapshot: VisualItemWithImages[]) {
+    if (isRestoringUndoRef.current) return;
+
+    isRestoringUndoRef.current = true;
+    setError(null);
+    setNotice(null);
+    setItems(cloneItemsSnapshot(snapshot));
+    setVisualItemDrag(null);
+
+    const results = await Promise.all(
+      snapshot.map((item) =>
+        supabase
+          .from("visual_items")
+          .update({
+            order_index: item.order_index,
+            display_date: item.display_date,
+            weekday: item.weekday,
+            notes: item.notes,
+          })
+          .eq("id", item.id),
+      ),
+    );
+    const firstError = results.find((result) => result.error)?.error;
+
+    if (firstError) {
+      setError(firstError.message);
+    } else {
+      setNotice("Ultima alteracao desfeita.");
+    }
+
+    isRestoringUndoRef.current = false;
+  }
+
+  function undoLastVisualChange() {
+    const previousSnapshot = itemsUndoStackRef.current.pop();
+
+    if (!previousSnapshot) return false;
+
+    void restoreItemsSnapshot(previousSnapshot);
+    return true;
+  }
+
+  useEffect(() => {
+    function handleUndoShortcut(event: KeyboardEvent) {
+      const isUndo = (event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === "z";
+
+      if (!isUndo || isNativeUndoTarget(event.target)) return;
+
+      if (undoLastVisualChange()) {
+        event.preventDefault();
+      }
+    }
+
+    window.addEventListener("keydown", handleUndoShortcut);
+
+    return () => window.removeEventListener("keydown", handleUndoShortcut);
+    // restoreItemsSnapshot reads only stable refs/setters here; keep one listener per page mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function limitedFilesForFormat(format: VisualFormat, files: File[], currentCount = 0) {
+    const limit = formatLimits[format];
+    const availableSlots = Math.max(limit - currentCount, 0);
+
+    if (!files.length) {
+      setError("Selecione pelo menos uma imagem valida.");
+      return [];
+    }
+
+    if (availableSlots <= 0) {
+      setError(`${publicationLabel(format)} ja atingiu o limite de ${limit} imagem${limit > 1 ? "s" : ""}.`);
+      return [];
+    }
+
+    if (files.length > availableSlots) {
+      setError(`${publicationLabel(format)} aceita no maximo ${limit} imagem${limit > 1 ? "s" : ""}.`);
+    } else {
+      setError(null);
+    }
+
+    return files.slice(0, availableSlots);
+  }
+
+  function selectedWeekDateError(date: string, label = "Essa data") {
+    if (!selectedWeek || isDayMonthInVisualWeek(date, selectedWeek)) return "";
+
+    return `${label} pertence a outra semana.`;
+  }
+
+  function validateFormDatesForSelectedWeek() {
+    if (!selectedWeek) return "";
+
+    if (form.format === "stories") {
+      const outsideStoryIndex = form.storyImages.findIndex(
+        (story) => !isDayMonthInVisualWeek(story.date, selectedWeek),
+      );
+
+      return outsideStoryIndex >= 0
+        ? `A data do Story ${outsideStoryIndex + 1} pertence a outra semana.`
+        : "";
+    }
+
+    return selectedWeekDateError(form.date);
+  }
+
+  function validateEditDatesForSelectedWeek() {
+    if (!selectedWeek || !editForm) return "";
+
+    if (editForm.format === "stories") {
+      const outsideStoryIndex = editForm.imageDrafts.findIndex(
+        (draft) => !isDayMonthInVisualWeek(draft.date, selectedWeek),
+      );
+
+      return outsideStoryIndex >= 0
+        ? `A data do Story ${outsideStoryIndex + 1} pertence a outra semana.`
+        : "";
+    }
+
+    return selectedWeekDateError(editForm.date);
+  }
+
+  function openForm(format: VisualFormat, files: File[] = []) {
+    setError(null);
+    const nextForm = {
+      ...initialPublicationForm(format),
+      date: dateLabelForWeekOffset(selectedWeek),
+    };
+    const acceptedFiles = files.length ? limitedFilesForFormat(format, files) : [];
+
+    if (acceptedFiles.length) {
+      if (format === "stories") {
+        nextForm.storyImages = storyDraftsFromFiles(acceptedFiles, selectedWeek);
+      } else {
+        nextForm.imageFiles = acceptedFiles;
+      }
+    }
+
     setActiveFormat(format);
-    setForm(initialPublicationForm(format));
+    setForm(nextForm);
     setEditForm(null);
     setFileInputKey((current) => current + 1);
-    setError(null);
     setNotice(null);
   }
 
+  function handleCreationCardFiles(format: VisualFormat, rawFiles: File[]) {
+    const files = imageFilesFromList(rawFiles);
+
+    if (!files.length) {
+      setError("Envie arquivos de imagem validos.");
+      return;
+    }
+
+    openForm(format, files);
+  }
+
   function openEditForm(item: VisualItemWithImages) {
+    const format = visualFormatFromValue(item.format);
+    const sortedImages = sortImagesByOrder(item.images);
+    const editableImages =
+      sortedImages.length || !item.image_url
+        ? sortedImages
+        : [
+            {
+              id: item.id,
+              visual_item_id: item.id,
+              image_url: item.image_url,
+              image_path: item.image_path,
+              order_index: 0,
+              created_at: item.created_at,
+            },
+          ];
+    const imageDrafts: EditImageDraft[] = editableImages.map((image, index) => {
+      const metadata =
+        format === "stories"
+          ? storyImageMetadata({
+              notes: item.notes,
+              imageId: image.id,
+              orderIndex: image.order_index ?? index,
+              fallbackDate: item.display_date,
+              fallbackWeekday: item.weekday,
+            })
+          : {
+              displayDate: item.display_date,
+              weekday: item.weekday,
+            };
+
+      return {
+        draftId: image.id,
+        imageId: sortedImages.length ? image.id : undefined,
+        imageUrl: image.image_url,
+        imagePath: image.image_path,
+        date: dateFromDisplayDate(metadata.displayDate),
+        weekday: metadata.weekday || "SEG",
+        orderIndex: index,
+      };
+    });
+
     setEditForm({
       itemId: item.id,
-      format: visualFormatFromValue(item.format),
+      format,
       weekday: item.weekday || "SEG",
       date: dateFromDisplayDate(item.display_date),
+      imageDrafts,
     });
     setActiveFormat(null);
     setError(null);
@@ -299,25 +997,53 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
 
     if (!presentation || !activeFormat) return;
 
-    if (!form.weekday) {
-      setError("Selecione um dia da semana antes de salvar.");
-      return;
-    }
+    const filesToUpload =
+      form.format === "stories" ? form.storyImages.map((story) => story.file) : form.imageFiles;
+    const itemWeekday = form.format === "stories" ? form.storyImages[0]?.weekday : form.weekday;
+    const itemDate = form.format === "stories" ? form.storyImages[0]?.date : form.date;
 
-    const dateError = getDayMonthInputError(form.date);
-
-    if (dateError) {
-      setError(dateError);
-      return;
-    }
-
-    if (!form.imageFiles.length) {
+    if (!filesToUpload.length) {
       setError("Selecione pelo menos uma imagem.");
       return;
     }
 
-    if (form.format === "post" && form.imageFiles.length !== 1) {
+    if (filesToUpload.length > formatLimits[form.format]) {
+      setError(`${publicationLabel(form.format)} aceita no maximo ${formatLimits[form.format]} imagens.`);
+      return;
+    }
+
+    if (form.format === "post" && filesToUpload.length !== 1) {
       setError("Post aceita apenas uma imagem.");
+      return;
+    }
+
+    if (form.format === "stories") {
+      const incompleteStoryIndex = form.storyImages.findIndex(
+        (story) => !story.weekday || getDayMonthInputError(story.date),
+      );
+
+      if (incompleteStoryIndex >= 0) {
+        setError(`Preencha data e dia do Story ${incompleteStoryIndex + 1}.`);
+        return;
+      }
+    } else {
+      if (!form.weekday) {
+        setError("Selecione um dia da semana antes de salvar.");
+        return;
+      }
+
+      const dateError = getDayMonthInputError(form.date);
+
+      if (dateError) {
+        setError(dateError);
+        return;
+      }
+    }
+
+    const weekDateError = validateFormDatesForSelectedWeek();
+
+    if (weekDateError) {
+      setError(weekDateError);
       return;
     }
 
@@ -331,9 +1057,10 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
         visual_presentation_id: presentation.id,
         format: form.format,
         label: null,
-        weekday: form.weekday,
-        display_date: form.date,
+        weekday: itemWeekday,
+        display_date: itemDate,
         order_index: nextOrderIndex(items),
+        notes: null,
         is_visible: true,
       })
       .select("*")
@@ -353,8 +1080,8 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
     }> = [];
     const uploadedPaths: string[] = [];
 
-    for (let index = 0; index < form.imageFiles.length; index += 1) {
-      const file = form.imageFiles[index];
+    for (let index = 0; index < filesToUpload.length; index += 1) {
+      const file = filesToUpload[index];
       const optimizedFile = await optimizeImage(file, form.format);
       const imagePath = visualPresentationStoragePath({
         clientId: presentation.client_id,
@@ -399,9 +1126,10 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
       });
     }
 
-    const { error: imageInsertError } = await supabase
+    const { data: insertedImageRows, error: imageInsertError } = await supabase
       .from("visual_item_images")
-      .insert(uploadedRows);
+      .insert(uploadedRows)
+      .select("*");
 
     if (imageInsertError) {
       await cleanupFailedPublication(itemData.id, uploadedPaths);
@@ -410,16 +1138,25 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
       return;
     }
 
-    const firstUploadedImage = uploadedRows[0];
+    const sortedInsertedImages = sortImagesByOrder((insertedImageRows ?? []) as VisualItemImage[]);
+    const imagesForNotes = sortedInsertedImages.length ? sortedInsertedImages : uploadedRows;
+    const firstUploadedImage = sortedInsertedImages[0] ?? uploadedRows[0];
 
     if (firstUploadedImage) {
-      await supabase
-        .from("visual_items")
-        .update({
-          image_url: firstUploadedImage.image_url,
-          image_path: firstUploadedImage.image_path,
-        })
-        .eq("id", itemData.id);
+      const updatePayload: {
+        image_url: string | null;
+        image_path: string | null;
+        notes?: string | null;
+      } = {
+        image_url: firstUploadedImage.image_url,
+        image_path: firstUploadedImage.image_path,
+      };
+
+      if (form.format === "stories") {
+        updatePayload.notes = buildStoryImageNotes(imagesForNotes, form.storyImages);
+      }
+
+      await supabase.from("visual_items").update(updatePayload).eq("id", itemData.id);
     }
 
     setForm(initialPublicationForm(form.format));
@@ -433,17 +1170,45 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
   async function handleSaveEdit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!editForm) return;
+    if (!editForm || !presentation) return;
 
-    if (!editForm.weekday) {
-      setError("Selecione um dia da semana para salvar a edicao.");
+    if (!editForm.imageDrafts.length) {
+      setError("Mantenha pelo menos uma imagem no item.");
       return;
     }
 
-    const dateError = getDayMonthInputError(editForm.date);
+    if (editForm.imageDrafts.length > formatLimits[editForm.format]) {
+      setError(`${publicationLabel(editForm.format)} aceita no maximo ${formatLimits[editForm.format]} imagens.`);
+      return;
+    }
 
-    if (dateError) {
-      setError(dateError);
+    if (editForm.format === "stories") {
+      const invalidStoryIndex = editForm.imageDrafts.findIndex(
+        (draft) => !draft.weekday || getDayMonthInputError(draft.date),
+      );
+
+      if (invalidStoryIndex >= 0) {
+        setError(`Preencha data e dia do Story ${invalidStoryIndex + 1}.`);
+        return;
+      }
+    } else {
+      if (!editForm.weekday) {
+        setError("Selecione um dia da semana para salvar a edicao.");
+        return;
+      }
+
+      const dateError = getDayMonthInputError(editForm.date);
+
+      if (dateError) {
+        setError(dateError);
+        return;
+      }
+    }
+
+    const weekDateError = validateEditDatesForSelectedWeek();
+
+    if (weekDateError) {
+      setError(weekDateError);
       return;
     }
 
@@ -451,18 +1216,187 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
     setError(null);
     setNotice(null);
 
+    const currentItem = items.find((item) => item.id === editForm.itemId);
+    const originalImages = sortImagesByOrder(currentItem?.images);
+    const keptImageIds = new Set(editForm.imageDrafts.map((draft) => draft.imageId).filter(Boolean));
+    const imagesToDelete = originalImages.filter((image) => !keptImageIds.has(image.id));
+    const uploadedPaths: string[] = [];
+    const pathsToRemove = imagesToDelete.map((image) => image.image_path).filter(Boolean) as string[];
+
+    for (let index = 0; index < editForm.imageDrafts.length; index += 1) {
+      const draft = editForm.imageDrafts[index];
+
+      if (draft.file) {
+        const optimizedFile = await optimizeImage(draft.file, editForm.format);
+        const imagePath = visualPresentationStoragePath({
+          clientId: presentation.client_id,
+          presentationId: presentation.id,
+          itemId: editForm.itemId,
+          fileName: optimizedFile.name,
+          index,
+        });
+
+        const { error: uploadError } = await supabase.storage
+          .from(visualPresentationsBucket)
+          .upload(imagePath, optimizedFile, {
+            contentType: optimizedFile.type || undefined,
+            upsert: false,
+          });
+
+        if (uploadError) {
+          if (uploadedPaths.length) {
+            await supabase.storage.from(visualPresentationsBucket).remove(uploadedPaths);
+          }
+          setError(uploadError.message);
+          setSavingEdit(false);
+          return;
+        }
+
+        uploadedPaths.push(imagePath);
+
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from(visualPresentationsBucket).getPublicUrl(imagePath);
+
+        if (!publicUrl) {
+          await supabase.storage.from(visualPresentationsBucket).remove(uploadedPaths);
+          setError("Nao foi possivel gerar a URL publica da imagem.");
+          setSavingEdit(false);
+          return;
+        }
+
+        if (draft.imageId) {
+          const originalImage = originalImages.find((image) => image.id === draft.imageId);
+          const { error: imageUpdateError } = await supabase
+            .from("visual_item_images")
+            .update({
+              image_url: publicUrl,
+              image_path: imagePath,
+              order_index: index,
+            })
+            .eq("id", draft.imageId);
+
+          if (imageUpdateError) {
+            await supabase.storage.from(visualPresentationsBucket).remove(uploadedPaths);
+            setError(imageUpdateError.message);
+            setSavingEdit(false);
+            return;
+          }
+
+          if (originalImage?.image_path) {
+            pathsToRemove.push(originalImage.image_path);
+          }
+        } else {
+          const { error: imageInsertError } = await supabase.from("visual_item_images").insert({
+            visual_item_id: editForm.itemId,
+            image_url: publicUrl,
+            image_path: imagePath,
+            order_index: index,
+          });
+
+          if (imageInsertError) {
+            await supabase.storage.from(visualPresentationsBucket).remove(uploadedPaths);
+            setError(imageInsertError.message);
+            setSavingEdit(false);
+            return;
+          }
+        }
+      } else if (draft.imageId) {
+        const { error: imageOrderError } = await supabase
+          .from("visual_item_images")
+          .update({
+            order_index: index,
+          })
+          .eq("id", draft.imageId);
+
+        if (imageOrderError) {
+          setError(imageOrderError.message);
+          setSavingEdit(false);
+          return;
+        }
+      } else if (draft.imageUrl) {
+        const { error: legacyImageInsertError } = await supabase.from("visual_item_images").insert({
+          visual_item_id: editForm.itemId,
+          image_url: draft.imageUrl,
+          image_path: draft.imagePath ?? null,
+          order_index: index,
+        });
+
+        if (legacyImageInsertError) {
+          setError(legacyImageInsertError.message);
+          setSavingEdit(false);
+          return;
+        }
+      }
+    }
+
+    if (imagesToDelete.length) {
+      const { error: deleteImagesError } = await supabase
+        .from("visual_item_images")
+        .delete()
+        .in(
+          "id",
+          imagesToDelete.map((image) => image.id),
+        );
+
+      if (deleteImagesError) {
+        setError(deleteImagesError.message);
+        setSavingEdit(false);
+        return;
+      }
+    }
+
+    const { data: currentImages, error: currentImagesError } = await supabase
+      .from("visual_item_images")
+      .select("*")
+      .eq("visual_item_id", editForm.itemId)
+      .order("order_index", { ascending: true })
+      .order("created_at", { ascending: true });
+
+    if (currentImagesError) {
+      setError(currentImagesError.message);
+      setSavingEdit(false);
+      return;
+    }
+
+    const finalImages = sortImagesByOrder((currentImages ?? []) as VisualItemImage[]);
+    const firstImage = finalImages[0];
+    const itemWeekday =
+      editForm.format === "stories" ? editForm.imageDrafts[0]?.weekday || editForm.weekday : editForm.weekday;
+    const itemDate =
+      editForm.format === "stories" ? editForm.imageDrafts[0]?.date || editForm.date : editForm.date;
+    const notes =
+      editForm.format === "stories"
+        ? buildStoryImageNotes(
+            finalImages,
+            editForm.imageDrafts.map((draft) => ({
+              displayDate: draft.date,
+              weekday: draft.weekday,
+            })),
+          )
+        : currentItem?.notes ?? null;
+
     const { error: updateError } = await supabase
       .from("visual_items")
       .update({
         format: editForm.format,
-        weekday: editForm.weekday,
-        display_date: editForm.date,
+        weekday: itemWeekday,
+        display_date: itemDate,
+        image_url: firstImage?.image_url ?? null,
+        image_path: firstImage?.image_path ?? null,
+        notes,
       })
       .eq("id", editForm.itemId);
 
     if (updateError) {
       setError(updateError.message);
     } else {
+      if (pathsToRemove.length) {
+        await Promise.all([
+          supabase.storage.from(visualPresentationsBucket).remove(pathsToRemove),
+          supabase.storage.from(legacyPresentationAssetsBucket).remove(pathsToRemove),
+        ]);
+      }
       setEditForm(null);
       await loadPresentation();
       setNotice("Publicacao atualizada.");
@@ -543,12 +1477,497 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
     window.setTimeout(() => setCopied(false), 1800);
   }
 
+  async function handleQuickUpdate(
+    item: VisualItemWithImages,
+    values: {
+      displayDate?: string;
+      weekday?: string;
+      imageId?: string | null;
+      imageIndex?: number;
+    },
+  ) {
+    const format = visualFormatFromValue(item.format);
+    const nextDate = values.displayDate ? formatDateInput(values.displayDate) : undefined;
+    const nextWeekday = values.weekday ? normalizeWeekdayValue(values.weekday) : undefined;
+
+    if (nextDate) {
+      const dateError = getDayMonthInputError(nextDate);
+
+      if (dateError) {
+        setError(dateError);
+        return;
+      }
+
+      const weekDateError = selectedWeekDateError(nextDate);
+
+      if (weekDateError) {
+        setError(weekDateError);
+        return;
+      }
+    }
+
+    setError(null);
+    setNotice(null);
+    pushItemsUndoSnapshot();
+
+    if (format === "stories" && item.images?.length && (values.imageId || values.imageIndex !== undefined)) {
+      const sortedImages = sortImagesByOrder(item.images);
+      const targetIndex = Math.max(
+        sortedImages.findIndex((image) => image.id === values.imageId),
+        values.imageIndex ?? -1,
+      );
+
+      if (targetIndex < 0 || targetIndex >= sortedImages.length) return;
+
+      const metadata = sortedImages.map((image, index) => {
+        const currentMetadata = storyImageMetadata({
+          notes: item.notes,
+          imageId: image.id,
+          orderIndex: image.order_index ?? index,
+          fallbackDate: item.display_date,
+          fallbackWeekday: item.weekday,
+        });
+
+        return index === targetIndex
+          ? {
+              displayDate: nextDate ?? currentMetadata.displayDate ?? item.display_date,
+              weekday: nextWeekday ?? currentMetadata.weekday ?? item.weekday,
+            }
+          : {
+              displayDate: currentMetadata.displayDate ?? item.display_date,
+              weekday: currentMetadata.weekday ?? item.weekday,
+            };
+      });
+      const notes = buildStoryImageNotes(sortedImages, metadata);
+      const firstMetadata = metadata[0];
+
+      const { error: updateError } = await supabase
+        .from("visual_items")
+        .update({
+          notes,
+          display_date: firstMetadata?.displayDate ?? item.display_date,
+          weekday: firstMetadata?.weekday ?? item.weekday,
+        })
+        .eq("id", item.id);
+
+      if (updateError) {
+        setError(updateError.message);
+        return;
+      }
+
+      setItems((currentItems) =>
+        currentItems.map((currentItem) =>
+          currentItem.id === item.id
+            ? {
+                ...currentItem,
+                notes,
+                display_date: firstMetadata?.displayDate ?? currentItem.display_date,
+                weekday: firstMetadata?.weekday ?? currentItem.weekday,
+              }
+            : currentItem,
+        ),
+      );
+      return;
+    }
+
+    const updatePayload = {
+      display_date: nextDate ?? item.display_date,
+      weekday: nextWeekday ?? item.weekday,
+    };
+    const { error: updateError } = await supabase
+      .from("visual_items")
+      .update(updatePayload)
+      .eq("id", item.id);
+
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+
+    setItems((currentItems) =>
+      currentItems.map((currentItem) =>
+        currentItem.id === item.id
+          ? {
+              ...currentItem,
+              display_date: updatePayload.display_date,
+              weekday: updatePayload.weekday,
+            }
+          : currentItem,
+      ),
+    );
+  }
+
+  async function persistItemOrder(nextItems: VisualItemWithImages[]) {
+    const previousItems = items;
+    const orderedItems = nextItems.map((item, index) => ({
+      ...item,
+      order_index: index,
+    }));
+
+    pushItemsUndoSnapshot(previousItems);
+    setItems(orderedItems);
+    setReorderingItemId(orderedItems.find((item, index) => item.id !== previousItems[index]?.id)?.id ?? null);
+    setError(null);
+    setNotice(null);
+
+    const results = await Promise.all(
+      orderedItems.map((item, index) =>
+        supabase
+          .from("visual_items")
+          .update({
+            order_index: index,
+          })
+          .eq("id", item.id),
+      ),
+    );
+    const firstError = results.find((result) => result.error)?.error;
+
+    if (firstError) {
+      setItems(previousItems);
+      setError(firstError.message);
+    }
+
+    setReorderingItemId(null);
+  }
+
+  function handleVisualItemDragStart(
+    event: DragEvent<HTMLDivElement>,
+    item: VisualItemWithImages,
+  ) {
+    if (shouldIgnoreImageDrag(event.target) || reorderingItemId) {
+      event.preventDefault();
+      return;
+    }
+
+    const index = items.findIndex((currentItem) => currentItem.id === item.id);
+
+    if (index < 0) {
+      event.preventDefault();
+      return;
+    }
+
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", item.id);
+    visualOrderChangedRef.current = false;
+    setVisualItemDrag({
+      itemId: item.id,
+      fromIndex: index,
+      dropIndex: index,
+    });
+  }
+
+  function handleVisualItemDragOver(event: DragEvent<HTMLDivElement>, targetItem: VisualItemWithImages) {
+    if (!visualItemDrag) return;
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    const currentIndex = items.findIndex((item) => item.id === visualItemDrag.itemId);
+    const targetIndex = items.findIndex((item) => item.id === targetItem.id);
+
+    if (currentIndex < 0 || targetIndex < 0) return;
+
+    const dropIndex = dragInsertIndex(event, currentIndex, targetIndex, items.length);
+
+    if (currentIndex !== dropIndex) {
+      const reorderedItems = reorderCollection(items, currentIndex, dropIndex);
+
+      itemsRef.current = reorderedItems;
+      visualOrderChangedRef.current = true;
+      setItems(reorderedItems);
+      setVisualItemDrag({
+        itemId: visualItemDrag.itemId,
+        fromIndex: dropIndex,
+        dropIndex,
+      });
+    }
+  }
+
+  function dropVisualItem(event?: DragEvent<HTMLElement>) {
+    event?.preventDefault();
+
+    if (!visualItemDrag) return;
+
+    setVisualItemDrag(null);
+
+    if (visualOrderChangedRef.current) {
+      const finalItems = itemsRef.current;
+
+      visualOrderChangedRef.current = false;
+      void persistItemOrder(finalItems);
+    }
+  }
+
+  function cancelVisualItemDrag() {
+    if (visualItemDrag && visualOrderChangedRef.current) {
+      const finalItems = itemsRef.current;
+
+      setVisualItemDrag(null);
+      visualOrderChangedRef.current = false;
+      void persistItemOrder(finalItems);
+      return;
+    }
+
+    setVisualItemDrag(null);
+    visualOrderChangedRef.current = false;
+  }
+
+  function addPublicationFiles(rawFiles: File[]) {
+    if (!activeFormat) return;
+
+    const files = imageFilesFromList(rawFiles);
+
+    setForm((current) => {
+      const currentCount =
+        current.format === "stories" ? current.storyImages.length : current.imageFiles.length;
+      const acceptedFiles = limitedFilesForFormat(current.format, files, currentCount);
+
+      if (!acceptedFiles.length) return current;
+
+      if (current.format === "stories") {
+        return {
+          ...current,
+          storyImages: [
+            ...current.storyImages,
+            ...storyDraftsFromFiles(acceptedFiles, selectedWeek, current.storyImages.length),
+          ],
+        };
+      }
+
+      return {
+        ...current,
+        imageFiles:
+          current.format === "post"
+            ? acceptedFiles.slice(0, 1)
+            : [...current.imageFiles, ...acceptedFiles],
+      };
+    });
+  }
+
+  function replacePublicationFile(index: number, rawFiles: File[]) {
+    const [file] = imageFilesFromList(rawFiles);
+
+    if (!file) return;
+
+    setForm((current) => {
+      if (current.format === "stories") {
+        return {
+          ...current,
+          storyImages: current.storyImages.map((story, storyIndex) =>
+            storyIndex === index ? { ...story, file } : story,
+          ),
+        };
+      }
+
+      return {
+        ...current,
+        imageFiles: current.imageFiles.map((currentFile, fileIndex) =>
+          fileIndex === index ? file : currentFile,
+        ),
+      };
+    });
+  }
+
+  function removePublicationImage(index: number) {
+    setForm((current) => {
+      if (current.format === "stories") {
+        return {
+          ...current,
+          storyImages: current.storyImages.filter((_, storyIndex) => storyIndex !== index),
+        };
+      }
+
+      return {
+        ...current,
+        imageFiles: current.imageFiles.filter((_, fileIndex) => fileIndex !== index),
+      };
+    });
+  }
+
+  function handlePublicationImageDragStart(event: DragEvent<HTMLDivElement>, index: number) {
+    if (shouldIgnoreImageDrag(event.target)) {
+      event.preventDefault();
+      return;
+    }
+
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(index));
+    setPublicationImageDrag({
+      fromIndex: index,
+      dropIndex: index,
+    });
+  }
+
+  function handlePublicationImageDragOver(event: DragEvent<HTMLDivElement>, index: number) {
+    if (!publicationImageDrag) return;
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+
+    const totalItems = form.format === "stories" ? form.storyImages.length : form.imageFiles.length;
+    const dropIndex = dragInsertIndex(event, publicationImageDrag.fromIndex, index, totalItems);
+
+    if (publicationImageDrag.fromIndex !== dropIndex) {
+      setForm((current) =>
+        current.format === "stories"
+          ? {
+              ...current,
+              storyImages: reorderCollection(current.storyImages, publicationImageDrag.fromIndex, dropIndex),
+            }
+          : {
+              ...current,
+              imageFiles: reorderCollection(current.imageFiles, publicationImageDrag.fromIndex, dropIndex),
+            },
+      );
+      setPublicationImageDrag({
+        fromIndex: dropIndex,
+        dropIndex,
+      });
+    }
+  }
+
+  function dropPublicationImage(event?: DragEvent<HTMLElement>) {
+    event?.preventDefault();
+
+    if (!publicationImageDrag) return;
+
+    setPublicationImageDrag(null);
+  }
+
+  function stopPublicationImageDrag() {
+    setPublicationImageDrag(null);
+  }
+
+  function updateStoryDraft(index: number, patch: Partial<Pick<StoryDraftImage, "date" | "weekday">>) {
+    setForm((current) => ({
+      ...current,
+      storyImages: current.storyImages.map((story, storyIndex) =>
+        storyIndex === index ? { ...story, ...patch } : story,
+      ),
+    }));
+  }
+
+  function updateEditImageDraft(
+    index: number,
+    patch: Partial<Pick<EditImageDraft, "date" | "weekday" | "file">>,
+  ) {
+    setEditForm((current) =>
+      current
+        ? {
+            ...current,
+            imageDrafts: current.imageDrafts.map((draft, draftIndex) =>
+              draftIndex === index ? { ...draft, ...patch } : draft,
+            ),
+          }
+        : current,
+    );
+  }
+
+  function addEditFiles(rawFiles: File[]) {
+    if (!editForm) return;
+
+    const files = imageFilesFromList(rawFiles);
+    const acceptedFiles = limitedFilesForFormat(editForm.format, files, editForm.imageDrafts.length);
+
+    if (!acceptedFiles.length) return;
+
+    setEditForm((current) =>
+      current
+        ? {
+            ...current,
+            imageDrafts: [
+              ...current.imageDrafts,
+              ...acceptedFiles.map((file, index) => ({
+                draftId: newDraftId(),
+                file,
+                date:
+                  current.format === "stories"
+                    ? dateLabelForWeekOffset(selectedWeek, current.imageDrafts.length + index)
+                    : current.date,
+                weekday: current.format === "stories" ? "SEG" : current.weekday,
+                orderIndex: current.imageDrafts.length + index,
+              })),
+            ],
+          }
+        : current,
+    );
+  }
+
+  function removeEditImage(index: number) {
+    setEditForm((current) =>
+      current
+        ? {
+            ...current,
+            imageDrafts: current.imageDrafts.filter((_, draftIndex) => draftIndex !== index),
+          }
+        : current,
+    );
+  }
+
+  function handleEditImageDragStart(event: DragEvent<HTMLDivElement>, index: number) {
+    if (shouldIgnoreImageDrag(event.target)) {
+      event.preventDefault();
+      return;
+    }
+
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(index));
+    setEditImageDrag({
+      fromIndex: index,
+      dropIndex: index,
+    });
+  }
+
+  function handleEditImageDragOver(event: DragEvent<HTMLDivElement>, index: number) {
+    if (!editImageDrag || !editForm) return;
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+
+    const dropIndex = dragInsertIndex(event, editImageDrag.fromIndex, index, editForm.imageDrafts.length);
+
+    if (editImageDrag.fromIndex !== dropIndex) {
+      setEditForm((current) =>
+        current
+          ? {
+              ...current,
+              imageDrafts: reorderCollection(current.imageDrafts, editImageDrag.fromIndex, dropIndex),
+            }
+          : current,
+      );
+      setEditImageDrag({
+        fromIndex: dropIndex,
+        dropIndex,
+      });
+    }
+  }
+
+  function dropEditImage(event?: DragEvent<HTMLElement>) {
+    event?.preventDefault();
+
+    if (!editImageDrag) return;
+
+    setEditImageDrag(null);
+  }
+
+  function stopEditImageDrag() {
+    setEditImageDrag(null);
+  }
+
   function closePublicationModal() {
     if (saving) return;
 
     setActiveFormat(null);
     setForm(initialPublicationForm("post"));
     setFileInputKey((current) => current + 1);
+    setPublicationImageDrag(null);
+  }
+
+  function closeEditModal() {
+    if (savingEdit) return;
+
+    setEditForm(null);
+    setError(null);
+    setEditImageDrag(null);
   }
 
   if (loading) {
@@ -576,6 +1995,9 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
   const presentationSubtitle = presentation.title?.includes(presentationPeriod)
     ? clientName
     : `${clientName} — ${presentationPeriod}`;
+  const hasMultipleWeeks = presentationWeeks.length > 1;
+  const primaryColor = client?.primary_color || "#DFFF06";
+  const secondaryColor = client?.secondary_color || primaryColor;
 
   return (
     <section className="space-y-6">
@@ -597,7 +2019,7 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
               </Button>
 
               <div className="min-w-0 flex-1">
-                <h1 className="truncate px-1 text-xl font-medium tracking-normal text-foreground md:text-2xl">
+                <h1 className="sora-heading truncate px-1 text-xl font-medium tracking-normal text-foreground md:text-2xl">
                   {presentation.title}
                 </h1>
                 <p className={cn("mt-0.5 truncate px-1 text-[11px]", mutedTextClass)}>
@@ -607,6 +2029,23 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
             </div>
 
             <div className="flex w-full flex-wrap items-center justify-center gap-1.5 lg:w-auto lg:justify-end">
+              <div className="inline-flex h-9 shrink-0 items-center justify-center rounded-md border border-border bg-background p-0.5 text-muted-foreground lg:h-8">
+                {(["visual", "edit"] as EditorMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setEditorMode(mode)}
+                    className={cn(
+                      "inline-flex h-8 items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-xs font-medium transition-all focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 lg:h-7 lg:px-2.5",
+                      editorMode === mode
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {mode === "visual" ? "Visual" : "Edição"}
+                  </button>
+                ))}
+              </div>
               <Button
                 type="button"
                 variant="ghostSecondary"
@@ -655,27 +2094,93 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
         </Card>
       ) : null}
 
-      <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible">
-        {publicationTypes.map((type) => {
-          const isActive = activeFormat === type.format;
+      {editorMode === "visual" ? (
+        <section className="space-y-7">
+          {hasMultipleWeeks ? (
+            <div className="space-y-3">
+              <SectionTitleWithTooltip
+                title="Semanas"
+                tooltip="Aqui você organiza a apresentação por semana. Clique em uma semana para abrir os uploads e itens dessa semana."
+              />
+              <WeekSelectionGrid
+                weeks={presentationWeeks}
+                selectedWeekId={selectedWeek?.id ?? null}
+                items={items}
+                onSelect={setSelectedWeekId}
+              />
+            </div>
+          ) : null}
 
-          return (
-            <Button
-              key={type.format}
-              type="button"
-              variant="default"
-              className={cn(
-                "h-9 shrink-0 gap-2 rounded-lg bg-[var(--zacx-brand)] px-3 text-xs font-medium text-white hover:opacity-90 dark:text-black sm:h-10 sm:px-4 sm:text-sm",
-                isActive && "ring-2 ring-[var(--zacx-brand)] ring-offset-2 ring-offset-background",
-              )}
-              onClick={() => openForm(type.format)}
-            >
-              <Plus className="h-4 w-4" />
-              {type.label}
-            </Button>
-          );
-        })}
-      </div>
+          <div className="space-y-6">
+            <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="sora-heading text-base font-semibold text-foreground">
+                  {selectedWeek?.label || "Prévia da apresentação"}
+                </h2>
+                <p className={cn("text-xs", mutedTextClass)}>
+                  {selectedWeek?.periodLabel || presentation.period_label || "Periodo nao definido"}
+                </p>
+              </div>
+              <span className="rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground">
+                Prévia visual
+              </span>
+            </div>
+
+            {selectedWeekItems.length ? (
+              <div className="space-y-8 md:space-y-12">
+                {selectedWeekItems.map((item) => (
+                  <VisualPreviewItemSection
+                    key={item.id}
+                    item={item}
+                    client={client}
+                    theme={theme}
+                    primaryColor={primaryColor}
+                    secondaryColor={secondaryColor}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className={cn("text-sm", mutedTextClass)}>
+                Nenhuma arte cadastrada para esta semana.
+              </p>
+            )}
+          </div>
+        </section>
+      ) : (
+        <section className="space-y-8">
+          <div className="space-y-3">
+            <SectionTitleWithTooltip
+              title="Semanas"
+              tooltip="Aqui você organiza a apresentação por semana. Clique em uma semana para abrir os uploads e itens dessa semana."
+            />
+            <WeekSelectionGrid
+              weeks={presentationWeeks}
+              selectedWeekId={selectedWeek?.id ?? null}
+              items={items}
+              onSelect={setSelectedWeekId}
+            />
+          </div>
+
+          <div className="space-y-3">
+            <SectionTitleWithTooltip
+              title="Uploads"
+              tooltip="Aqui você adiciona posts, carrosséis e stories da semana selecionada."
+            />
+            <div className="no-scrollbar grid auto-cols-[minmax(132px,1fr)] grid-flow-col gap-3 overflow-x-auto pb-1 md:grid-flow-row md:grid-cols-3 md:overflow-visible">
+              {publicationTypes.map((type) => (
+                <AddFormatCard
+                  key={type.format}
+                  format={type.format}
+                  label={type.label}
+                  description={type.description}
+                  active={activeFormat === type.format}
+                  onFiles={(files) => handleCreationCardFiles(type.format, files)}
+                />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {activeFormat ? (
         <div
@@ -688,8 +2193,8 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-medium text-foreground">
-                  Criar {publicationLabel(activeFormat)}
+                <h2 className="sora-heading text-2xl font-medium text-foreground">
+                  Adicionar {publicationLabel(activeFormat)}
                 </h2>
               </div>
               <Button
@@ -704,91 +2209,192 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
             </div>
 
             <form className="mt-6 grid gap-5" onSubmit={handleAddPublication}>
-              <div className="space-y-2">
-                <Label>Dia da semana</Label>
-                <WeekdayControl
-                  value={form.weekday}
-                  onChange={(weekday) => setForm((current) => ({ ...current, weekday }))}
-                />
-              </div>
-
-              <div className="max-w-[160px] space-y-2">
-                <div className="space-y-2">
-                  <Label htmlFor="publicationDate">Data</Label>
-                  <Input
-                    id="publicationDate"
-                    inputMode="numeric"
-                    maxLength={5}
-                    value={form.date}
-                    className={error && getDayMonthInputError(form.date) ? "border-rose-500 focus-visible:ring-rose-500" : undefined}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        date: formatDateInput(event.target.value),
-                      }))
-                    }
-                    placeholder="15/06"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <input
-                  key={fileInputKey}
-                  id="publicationImages"
-                  type="file"
-                  accept="image/*"
-                  multiple={activeFormat !== "post"}
-                  className="sr-only"
-                  onChange={(event) => {
-                    const files = Array.from(event.target.files ?? []);
-
-                    setForm((current) => ({
-                      ...current,
-                      imageFiles: activeFormat === "post" ? files.slice(0, 1) : files,
-                    }));
-                  }}
-                />
-                <label
-                  htmlFor="publicationImages"
-                  className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
-                >
-                  <ImagePlus className="h-4 w-4" />
-                  Subir imagens
-                </label>
-                <p className={cn("text-xs", mutedTextClass)}>
-                  {activeFormat === "post"
-                    ? "Post aceita apenas 1 imagem."
-                    : "Selecione as imagens na ordem em que devem aparecer."}
-                </p>
-                {selectedImagePreviews.length ? (
-                  <div className={cn("rounded-lg border p-3", nestedSurfaceClass)}>
-                    <p className="mb-3 text-sm font-medium text-foreground">
-                      {selectedImagePreviews.length} arquivo
-                      {selectedImagePreviews.length > 1 ? "s" : ""} selecionado
-                      {selectedImagePreviews.length > 1 ? "s" : ""}
+              {activeFormat === "stories" ? (
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className={cn("text-xs", mutedTextClass)}>
+                      Cada Story tem data e dia próprios. Limite de {formatLimits.stories} imagens.
                     </p>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedImagePreviews.map((preview, index) => (
-                        <div
-                          key={preview.url}
-                          className="group relative h-24 w-24 overflow-hidden rounded-md border border-border bg-card"
+                    {form.storyImages.length < formatLimits.stories ? (
+                      <>
+                        <input
+                          key={fileInputKey}
+                          id="publicationStoryImages"
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          className="sr-only"
+                          onChange={(event) => {
+                            addPublicationFiles(imageFilesFromList(event.target.files));
+                            event.currentTarget.value = "";
+                          }}
+                        />
+                        <label
+                          htmlFor="publicationStoryImages"
+                          className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-secondary"
                         >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={preview.url}
-                            alt={preview.name}
-                            className="h-full w-full object-cover"
-                          />
-                          <span className="absolute left-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-md bg-black/70 text-xs font-medium text-white">
-                            {index + 1}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
+                          <Upload className="h-3.5 w-3.5" />
+                          Adicionar imagens
+                        </label>
+                      </>
+                    ) : null}
                   </div>
-                ) : null}
-              </div>
+
+                  <div className="grid gap-3">
+                    {form.storyImages.map((story, index) => {
+                      const preview = selectedStoryPreviews[index];
+
+                      return (
+                        <div
+                          key={story.draftId}
+                          draggable
+                          onDragStart={(event) => handlePublicationImageDragStart(event, index)}
+                          onDragOver={(event) => handlePublicationImageDragOver(event, index)}
+                          onDragEnd={stopPublicationImageDrag}
+                          onDrop={dropPublicationImage}
+                          className={cn(
+                            "grid cursor-grab gap-3 rounded-xl border p-3 transition-transform duration-150 ease-out active:cursor-grabbing sm:grid-cols-[120px_1fr]",
+                            nestedSurfaceClass,
+                            publicationImageDrag?.fromIndex === index && "scale-[1.01] shadow-sm shadow-black/10",
+                          )}
+                        >
+                          <ReplaceableImageFrame
+                            inputId={`replace-story-${story.draftId}`}
+                            previewUrl={preview?.url}
+                            alt={preview?.name || `Story ${index + 1}`}
+                            index={index}
+                            aspectClass="aspect-[9/16]"
+                            onReplace={(files) => replacePublicationFile(index, files)}
+                            onRemove={() => removePublicationImage(index)}
+                          />
+
+                          <div className="grid gap-3">
+                            <div className="grid gap-3 sm:grid-cols-[120px_1fr]">
+                              <div className="space-y-2">
+                                <Label htmlFor={`storyDate-${story.draftId}`}>Data</Label>
+                                <Input
+                                  id={`storyDate-${story.draftId}`}
+                                  inputMode="numeric"
+                                  maxLength={5}
+                                  value={story.date}
+                                  data-no-image-drag="true"
+                                  onChange={(event) =>
+                                    updateStoryDraft(index, {
+                                      date: formatDateInput(event.target.value),
+                                    })
+                                  }
+                                  placeholder="15/06"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Dia da semana</Label>
+                                <WeekdayControl
+                                  value={story.weekday}
+                                  onChange={(weekday) => updateStoryDraft(index, { weekday })}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label>Dia da semana</Label>
+                    <WeekdayControl
+                      value={form.weekday}
+                      onChange={(weekday) => setForm((current) => ({ ...current, weekday }))}
+                    />
+                  </div>
+
+                  <div className="max-w-[160px] space-y-2">
+                    <Label htmlFor="publicationDate">Data</Label>
+                    <Input
+                      id="publicationDate"
+                      inputMode="numeric"
+                      maxLength={5}
+                      value={form.date}
+                      className={error && getDayMonthInputError(form.date) ? "border-rose-500 focus-visible:ring-rose-500" : undefined}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          date: formatDateInput(event.target.value),
+                        }))
+                      }
+                      placeholder="15/06"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    {form.imageFiles.length < formatLimits[activeFormat] ? (
+                      <>
+                        <input
+                          key={fileInputKey}
+                          id="publicationImages"
+                          type="file"
+                          accept="image/*"
+                          multiple={activeFormat !== "post"}
+                          className="sr-only"
+                          onChange={(event) => {
+                            addPublicationFiles(imageFilesFromList(event.target.files));
+                            event.currentTarget.value = "";
+                          }}
+                        />
+                        <label
+                          htmlFor="publicationImages"
+                          className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+                        >
+                          <ImagePlus className="h-4 w-4" />
+                          {form.imageFiles.length ? "Adicionar imagens" : "Subir imagens"}
+                        </label>
+                      </>
+                    ) : null}
+                    <p className={cn("text-xs", mutedTextClass)}>
+                      {activeFormat === "post"
+                        ? "Post aceita apenas 1 imagem."
+                        : "Carrossel aceita ate 20 imagens na ordem de exibicao."}
+                    </p>
+                    {selectedImagePreviews.length ? (
+                      <div className={cn("rounded-lg border p-3", nestedSurfaceClass)}>
+                        <p className="mb-3 text-sm font-medium text-foreground">
+                          {selectedImagePreviews.length} arquivo
+                          {selectedImagePreviews.length > 1 ? "s" : ""} selecionado
+                          {selectedImagePreviews.length > 1 ? "s" : ""}
+                        </p>
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                          {selectedImagePreviews.map((preview, index) => (
+                            <div
+                              key={preview.url}
+                              draggable
+                              onDragStart={(event) => handlePublicationImageDragStart(event, index)}
+                              onDragOver={(event) => handlePublicationImageDragOver(event, index)}
+                              onDragEnd={stopPublicationImageDrag}
+                              onDrop={dropPublicationImage}
+                              className={cn(
+                                "cursor-grab rounded-lg border border-border bg-background p-2 transition-transform duration-150 ease-out active:cursor-grabbing",
+                                publicationImageDrag?.fromIndex === index && "scale-[1.01] shadow-sm shadow-black/10",
+                              )}
+                            >
+                              <ReplaceableImageFrame
+                                inputId={`replace-image-${preview.id}-${index}`}
+                                previewUrl={preview.url}
+                                alt={preview.name}
+                                index={index}
+                                aspectClass="aspect-[4/5]"
+                                onReplace={(files) => replacePublicationFile(index, files)}
+                                onRemove={() => removePublicationImage(index)}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </>
+              )}
 
               {error ? (
                 <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-200">
@@ -799,7 +2405,7 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
               <div className="flex flex-wrap gap-3">
                 <Button type="submit" disabled={saving}>
                   <ImagePlus className="h-4 w-4" />
-                  {saving ? "Enviando..." : `Criar ${publicationLabel(activeFormat)}`}
+                  {saving ? "Enviando..." : `Adicionar ${publicationLabel(activeFormat)}`}
                 </Button>
                 <Button
                   type="button"
@@ -816,12 +2422,32 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
       ) : null}
 
       {editForm ? (
-        <Card className={surfaceClass}>
-          <CardHeader>
-            <CardTitle>Editar publicacao</CardTitle>
-            <CardDescription className={mutedTextClass}>
-              Ajuste formato, dia da semana e data. As imagens atuais serao mantidas.
-            </CardDescription>
+        <div
+          className="fixed inset-0 z-[110] grid place-items-end bg-black/35 px-3 py-3 dark:bg-black/55 sm:place-items-center sm:px-4 sm:py-6"
+          onClick={closeEditModal}
+        >
+          <Card
+            className={cn("max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border", surfaceClass)}
+            onClick={(event) => event.stopPropagation()}
+          >
+          <CardHeader className="flex flex-row items-start justify-between gap-4">
+            <div>
+              <CardTitle>Editar publicacao</CardTitle>
+              <CardDescription className={mutedTextClass}>
+                Ajuste formato, data, dia e imagens sem perder as informacoes ja preenchidas.
+              </CardDescription>
+            </div>
+            <Button
+              type="button"
+              variant="ghostSecondary"
+              size="icon"
+              onClick={closeEditModal}
+              disabled={savingEdit}
+              aria-label="Fechar edicao"
+              title="Fechar edicao"
+            >
+              <X className="h-4 w-4" />
+            </Button>
           </CardHeader>
           <CardContent>
             <form className="grid gap-4" onSubmit={handleSaveEdit}>
@@ -848,78 +2474,219 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
                     <option value="stories">Stories</option>
                   </select>
                 </div>
+                {editForm.format !== "stories" ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="editDate">Data</Label>
+                    <Input
+                      id="editDate"
+                      inputMode="numeric"
+                      maxLength={5}
+                      value={editForm.date}
+                      className={error && getDayMonthInputError(editForm.date) ? "border-rose-500 focus-visible:ring-rose-500" : undefined}
+                      onChange={(event) =>
+                        setEditForm((current) =>
+                          current
+                            ? {
+                                ...current,
+                                date: formatDateInput(event.target.value),
+                              }
+                            : current,
+                        )
+                      }
+                      placeholder="15/06"
+                    />
+                  </div>
+                ) : null}
+              </div>
+
+              {editForm.format !== "stories" ? (
                 <div className="space-y-2">
-                  <Label htmlFor="editDate">Data</Label>
-                  <Input
-                    id="editDate"
-                    inputMode="numeric"
-                    maxLength={5}
-                    value={editForm.date}
-                    className={error && getDayMonthInputError(editForm.date) ? "border-rose-500 focus-visible:ring-rose-500" : undefined}
-                    onChange={(event) =>
+                  <Label>Dia da semana</Label>
+                  <WeekdayControl
+                    value={editForm.weekday}
+                    onChange={(weekday) =>
                       setEditForm((current) =>
                         current
                           ? {
                               ...current,
-                              date: formatDateInput(event.target.value),
+                              weekday,
                             }
                           : current,
                       )
                     }
-                    placeholder="15/06"
                   />
                 </div>
+              ) : (
+                <p className={cn("text-xs", mutedTextClass)}>
+                  Stories usam data e dia individuais para cada imagem.
+                </p>
+              )}
+
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <Label>Imagens</Label>
+                  {editForm.imageDrafts.length < formatLimits[editForm.format] ? (
+                    <>
+                      <input
+                        key={editFileInputKey}
+                        id="editAddImages"
+                        type="file"
+                        accept="image/*"
+                        multiple={editForm.format !== "post"}
+                        className="sr-only"
+                        onChange={(event) => {
+                          addEditFiles(imageFilesFromList(event.target.files));
+                          event.currentTarget.value = "";
+                          setEditFileInputKey((current) => current + 1);
+                        }}
+                      />
+                      <label
+                        htmlFor="editAddImages"
+                        className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-secondary"
+                      >
+                        <Upload className="h-3.5 w-3.5" />
+                        Adicionar imagens
+                      </label>
+                    </>
+                  ) : null}
+                </div>
+
+                <div className={cn("grid gap-3", editForm.format !== "stories" && "grid-cols-2 sm:grid-cols-3 md:grid-cols-4")}>
+                  {editForm.imageDrafts.map((draft, index) => {
+                    const previewUrl = editImagePreviews.get(draft.draftId) || draft.imageUrl;
+                    const isStories = editForm.format === "stories";
+
+                    return (
+                      <div
+                        key={draft.draftId}
+                        draggable
+                        onDragStart={(event) => handleEditImageDragStart(event, index)}
+                        onDragOver={(event) => handleEditImageDragOver(event, index)}
+                        onDragEnd={stopEditImageDrag}
+                        onDrop={dropEditImage}
+                        className={cn(
+                          "grid cursor-grab gap-3 rounded-xl border p-3 transition-transform duration-150 ease-out active:cursor-grabbing",
+                          isStories && "sm:grid-cols-[110px_1fr]",
+                          nestedSurfaceClass,
+                          editImageDrag?.fromIndex === index && "scale-[1.01] shadow-sm shadow-black/10",
+                        )}
+                      >
+                        <ReplaceableImageFrame
+                          inputId={`editReplaceImage-${draft.draftId}`}
+                          previewUrl={previewUrl}
+                          alt={`Imagem ${index + 1}`}
+                          index={index}
+                          aspectClass={isStories ? "aspect-[9/16]" : "aspect-[4/5]"}
+                          onReplace={(files) => {
+                            const [file] = files;
+
+                            if (file) updateEditImageDraft(index, { file });
+                          }}
+                          onRemove={() => removeEditImage(index)}
+                        />
+
+                        {isStories ? (
+                          <div className="grid gap-3">
+                            <div className="grid gap-3 sm:grid-cols-[120px_1fr]">
+                              <div className="space-y-2">
+                                <Label htmlFor={`editStoryDate-${draft.draftId}`}>Data</Label>
+                                <Input
+                                  id={`editStoryDate-${draft.draftId}`}
+                                  inputMode="numeric"
+                                  maxLength={5}
+                                  value={draft.date}
+                                  data-no-image-drag="true"
+                                  onChange={(event) =>
+                                    updateEditImageDraft(index, {
+                                      date: formatDateInput(event.target.value),
+                                    })
+                                  }
+                                  placeholder="15/06"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Dia da semana</Label>
+                                <WeekdayControl
+                                  value={draft.weekday}
+                                  onChange={(weekday) => updateEditImageDraft(index, { weekday })}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Dia da semana</Label>
-                <WeekdayControl
-                  value={editForm.weekday}
-                  onChange={(weekday) =>
-                    setEditForm((current) =>
-                      current
-                        ? {
-                            ...current,
-                            weekday,
-                          }
-                        : current,
-                    )
-                  }
-                />
-              </div>
+
+              {error ? (
+                <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-200">
+                  {error}
+                </p>
+              ) : null}
+
               <div className="flex flex-wrap gap-3">
                 <Button type="submit" disabled={savingEdit}>
                   {savingEdit ? "Salvando..." : "Salvar edicao"}
                 </Button>
-                <Button type="button" variant="ghostSecondary" onClick={() => setEditForm(null)}>
+                <Button type="button" variant="ghostSecondary" onClick={closeEditModal}>
                   Cancelar
                 </Button>
               </div>
             </form>
           </CardContent>
         </Card>
+        </div>
       ) : null}
 
-      {items.length ? (
+      {editorMode === "edit" ? (
+        selectedWeekItems.length ? (
         <div className="grid gap-5 lg:grid-cols-2 2xl:grid-cols-3">
-          {items.map((item) => (
-            <VisualItemBoard
+          {selectedWeekItems.map((item) => {
+            const fullItem = items.find((currentItem) => currentItem.id === item.id) ?? item;
+
+            return (
+            <div
               key={item.id}
-              items={[item]}
-              client={client}
-              onEdit={openEditForm}
-              onDelete={deleteItem}
-              deletingItemId={deletingItemId}
-              theme={theme}
-            />
-          ))}
+              data-visual-item-card
+              draggable={!reorderingItemId}
+              onDragStart={(event) => handleVisualItemDragStart(event, fullItem)}
+              onDragOver={(event) => handleVisualItemDragOver(event, fullItem)}
+              onDrop={dropVisualItem}
+              onDragEnd={cancelVisualItemDrag}
+              className={cn(
+                "cursor-grab transition-transform duration-150 ease-out active:cursor-grabbing",
+                visualItemDrag?.itemId === item.id && "scale-[1.01] shadow-sm shadow-black/10",
+                reorderingItemId === item.id && "opacity-75",
+              )}
+            >
+              <VisualItemBoard
+                items={[item]}
+                client={client}
+                onEdit={() => openEditForm(fullItem)}
+                onDelete={() => deleteItem(fullItem)}
+                deletingItemId={deletingItemId}
+                theme={theme}
+                onQuickUpdate={handleQuickUpdate}
+                showDragHandle
+                dragHandleProps={{
+                  "aria-label": "Arrastar para reorganizar publicacao",
+                  className: "pointer-events-none",
+                }}
+              />
+            </div>
+            );
+          })}
         </div>
-      ) : (
+        ) : (
         <Card className={surfaceClass}>
           <CardContent className={cn("pt-5 text-sm", mutedTextClass)}>
-            Nenhuma publicacao visual criada ainda.
+            Nenhuma publicacao visual criada para esta semana ainda.
           </CardContent>
         </Card>
-      )}
+        )
+      ) : null}
     </section>
   );
 }

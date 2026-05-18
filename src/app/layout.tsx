@@ -1,13 +1,19 @@
 import "./globals.css";
 
 import type { Metadata, Viewport } from "next";
-import { Poppins } from "next/font/google";
+import { Poppins, Sora } from "next/font/google";
 
 import { ThemeProvider } from "@/components/theme/theme-provider";
 
 const poppins = Poppins({
   subsets: ["latin"],
   weight: ["300", "400", "500", "600"],
+});
+
+const sora = Sora({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-sora",
 });
 
 export const metadata: Metadata = {
@@ -57,8 +63,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR" className="dark" suppressHydrationWarning>
-      <body className={poppins.className}>
+    <html lang="pt-BR" className="light" suppressHydrationWarning>
+      <body className={`${poppins.className} ${sora.variable}`}>
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
