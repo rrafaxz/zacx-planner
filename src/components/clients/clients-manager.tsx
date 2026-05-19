@@ -16,6 +16,7 @@ import {
 import { ClientAvatarInput } from "@/components/clients/client-avatar-input";
 import { ClientCard } from "@/components/clients/client-card";
 import { ColorDotInput } from "@/components/clients/color-dot-input";
+import { AutoDismissToast } from "@/components/ui/auto-dismiss-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -32,7 +33,7 @@ const initialForm = {
   responsibleName: "",
 };
 
-const responsibleOptions = ["Rafael", "Matheus"] as const;
+const defaultResponsibleOptions = ["Rafael", "Matheus"] as const;
 type ClientSort = "az" | "za" | "more-demand" | "less-demand" | "newest" | "oldest";
 type ClientConfirmAction = {
   kind: "archive" | "unarchive" | "delete";
@@ -221,7 +222,7 @@ export function ClientsManager() {
   const [clientSearch, setClientSearch] = useState("");
   const [isClientSearchOpen, setIsClientSearchOpen] = useState(false);
   const [isClientFilterOpen, setIsClientFilterOpen] = useState(false);
-  const [responsibleFilter, setResponsibleFilter] = useState<"all" | "none" | "Rafael" | "Matheus">("all");
+  const [responsibleFilter, setResponsibleFilter] = useState("all");
   const [clientSort, setClientSort] = useState<ClientSort>("newest");
   const [showArchivedClients, setShowArchivedClients] = useState(false);
   const [clientSelectionMode, setClientSelectionMode] = useState(false);
@@ -325,6 +326,20 @@ export function ClientsManager() {
     () => uniqueSlug(slugify(form.name), clients),
     [clients, form.name],
   );
+  const clientResponsibleOptions = useMemo(() => {
+    const responsibleNames = clients
+      .map((client) => client.responsible_name?.trim())
+      .filter((responsible): responsible is string => Boolean(responsible));
+    const futureResponsibleNames = Array.from(
+      new Set(
+        responsibleNames.filter(
+          (responsible) => !defaultResponsibleOptions.some((defaultName) => defaultName === responsible),
+        ),
+      ),
+    ).sort((left, right) => left.localeCompare(right, "pt-BR"));
+
+    return [...defaultResponsibleOptions, ...futureResponsibleNames];
+  }, [clients]);
   const filteredClients = useMemo(() => {
     const search = normalizedSearch(clientSearch);
 
@@ -335,9 +350,7 @@ export function ClientsManager() {
         normalizedSearch(`${client.name} ${client.slug} ${client.responsible_name ?? ""}`).includes(search);
       const matchesResponsible =
         responsibleFilter === "all" ||
-        (responsibleFilter === "none"
-          ? !client.responsible_name
-          : client.responsible_name === responsibleFilter);
+        client.responsible_name === responsibleFilter;
 
       return matchesArchive && matchesSearch && matchesResponsible;
     });
@@ -367,7 +380,7 @@ export function ClientsManager() {
   useEffect(() => {
     setClientSelectionMode(false);
     setSelectedClientIds([]);
-  }, [showArchivedClients]);
+  }, [responsibleFilter, showArchivedClients]);
 
   function openModal() {
     setForm(initialForm);
@@ -616,10 +629,10 @@ export function ClientsManager() {
             <Button
               type="button"
               variant="ghostSecondary"
-	              className={cn(
-	                "h-10 w-10 rounded-lg border border-border bg-background p-0 text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground focus-visible:ring-0",
-	                hasActiveClientFilters && "border-foreground/30 text-foreground",
-	              )}
+              className={cn(
+                "h-10 w-10 rounded-lg border border-border bg-background p-0 text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground focus-visible:ring-0",
+                hasActiveClientFilters && "border-foreground/30 text-foreground",
+              )}
               onClick={() => setIsClientFilterOpen((current) => !current)}
               aria-label="Filtrar clientes"
               title="Filtrar clientes"
@@ -627,46 +640,31 @@ export function ClientsManager() {
               <SlidersHorizontal className="h-4 w-4" />
             </Button>
             {isClientFilterOpen ? (
-	              <div className="fixed inset-x-3 bottom-3 z-[120] rounded-2xl border border-border bg-background p-4 shadow-none md:absolute md:inset-x-auto md:bottom-auto md:right-0 md:top-[calc(100%+0.5rem)] md:z-30 md:w-72">
-	                <div className="grid gap-3">
-	                  <select
-	                    value={clientSort}
-	                    onChange={(event) => setClientSort(event.target.value as ClientSort)}
-	                    className="h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-neutral-400 dark:focus:border-white/35"
-	                  >
-	                    <option value="newest">Mais novos</option>
-	                    <option value="oldest">Mais antigos</option>
-	                    <option value="az">Ordem alfabética A-Z</option>
-	                    <option value="za">Ordem alfabética Z-A</option>
-	                    <option value="more-demand">Mais demandas</option>
-	                    <option value="less-demand">Menos demandas</option>
-	                  </select>
-	                  <select
-	                    value={responsibleFilter}
-	                    onChange={(event) =>
-                      setResponsibleFilter(event.target.value as "all" | "none" | "Rafael" | "Matheus")
-                    }
+              <div className="fixed inset-x-3 bottom-3 z-[120] rounded-2xl border border-border bg-background p-4 shadow-none md:absolute md:inset-x-auto md:bottom-auto md:right-0 md:top-[calc(100%+0.5rem)] md:z-30 md:w-72">
+                <div className="grid gap-3">
+                  <select
+                    value={clientSort}
+                    onChange={(event) => setClientSort(event.target.value as ClientSort)}
                     className="h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-neutral-400 dark:focus:border-white/35"
                   >
-                    <option value="all">Todos responsáveis</option>
-                    {responsibleOptions.map((responsible) => (
-                      <option key={responsible} value={responsible}>
-                        {responsible}
-                      </option>
-                    ))}
-	                    <option value="none">Sem responsável</option>
-	                  </select>
-	                  <select
-	                    value={showArchivedClients ? "archived" : "active"}
-	                    onChange={(event) => setShowArchivedClients(event.target.value === "archived")}
-	                    className="h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-neutral-400 dark:focus:border-white/35"
-	                  >
-	                    <option value="active">Ativos</option>
-	                    <option value="archived">Arquivados</option>
-	                  </select>
-	                  {hasActiveClientFilters ? (
-	                    <Button type="button" variant="ghostSecondary" size="sm" onClick={resetClientFilters}>
-	                      Limpar filtros
+                    <option value="newest">Mais novos</option>
+                    <option value="oldest">Mais antigos</option>
+                    <option value="az">Ordem alfabética A-Z</option>
+                    <option value="za">Ordem alfabética Z-A</option>
+                    <option value="more-demand">Mais demandas</option>
+                    <option value="less-demand">Menos demandas</option>
+                  </select>
+                  <select
+                    value={showArchivedClients ? "archived" : "active"}
+                    onChange={(event) => setShowArchivedClients(event.target.value === "archived")}
+                    className="h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-neutral-400 dark:focus:border-white/35"
+                  >
+                    <option value="active">Ativos</option>
+                    <option value="archived">Arquivados</option>
+                  </select>
+                  {hasActiveClientFilters ? (
+                    <Button type="button" variant="ghostSecondary" size="sm" onClick={resetClientFilters}>
+                      Limpar filtros
                     </Button>
                   ) : null}
                 </div>
@@ -714,103 +712,134 @@ export function ClientsManager() {
         </button>
       </div>
 
-      {success ? (
-        <Card className="border-emerald-600 bg-emerald-600 text-white">
-          <CardContent className="pt-5 text-sm font-medium">{success}</CardContent>
-        </Card>
-      ) : null}
+      <AutoDismissToast
+        message={success}
+        variant="success"
+        onDismiss={() => setSuccess(null)}
+      />
+      <AutoDismissToast
+        message={!modalOpen ? error : null}
+        variant="error"
+        onDismiss={() => setError(null)}
+      />
 
-      {!modalOpen && error ? (
-        <Card className="border-rose-600 bg-rose-600 text-white">
-          <CardContent className="pt-5 text-sm font-medium">{error}</CardContent>
-        </Card>
-      ) : null}
-
-      {clientSelectionMode ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
-          <span className="mr-auto font-medium text-foreground">
-            {selectedClientIds.length} selecionado{selectedClientIds.length === 1 ? "" : "s"}
-          </span>
-          {selectedClientIds.length ? (
-            showArchivedClients ? (
-              <Button
-                type="button"
-                variant="ghostSecondary"
-                size="sm"
-	                onClick={() => setClientConfirmAction({ kind: "unarchive", ids: selectedClientIds })}
-                disabled={bulkActionLoading}
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-                Desarquivar
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                variant="ghostSecondary"
-                size="sm"
-	                onClick={() => setClientConfirmAction({ kind: "archive", ids: selectedClientIds })}
-                disabled={bulkActionLoading}
-              >
-                <Archive className="h-3.5 w-3.5" />
-                Arquivar
-              </Button>
-            )
-          ) : null}
-          {selectedClientIds.length ? (
-            <Button
+      <div className="grid gap-4 lg:grid-cols-[150px_minmax(0,1fr)] lg:items-start">
+        <aside className="no-scrollbar flex gap-2 overflow-x-auto pb-1 lg:sticky lg:top-24 lg:flex-col lg:overflow-visible lg:pb-0">
+          <button
+            type="button"
+            onClick={() => setResponsibleFilter("all")}
+            className={cn(
+              "h-10 shrink-0 rounded-lg border border-border bg-background px-4 text-sm font-medium text-muted-foreground transition-colors hover:border-foreground/25 hover:text-foreground lg:w-full lg:text-left",
+              responsibleFilter === "all" &&
+                "border-[#1D10D7]/60 bg-[#1D10D7]/[0.06] text-foreground dark:border-[#DFFF06]/70 dark:bg-[#DFFF06]/10",
+            )}
+          >
+            Todos
+          </button>
+          {clientResponsibleOptions.map((responsible) => (
+            <button
+              key={responsible}
               type="button"
-              variant="ghostSecondary"
-              size="sm"
-	              onClick={() => setClientConfirmAction({ kind: "delete", ids: selectedClientIds })}
-              disabled={bulkActionLoading}
-              className="text-rose-500 hover:text-rose-500"
+              onClick={() => setResponsibleFilter(responsible)}
+              className={cn(
+                "h-10 shrink-0 rounded-lg border border-border bg-background px-4 text-sm font-medium text-muted-foreground transition-colors hover:border-foreground/25 hover:text-foreground lg:w-full lg:text-left",
+                responsibleFilter === responsible &&
+                  "border-[#1D10D7]/60 bg-[#1D10D7]/[0.06] text-foreground dark:border-[#DFFF06]/70 dark:bg-[#DFFF06]/10",
+              )}
             >
-              <Trash2 className="h-3.5 w-3.5" />
-              Excluir
-            </Button>
-          ) : null}
-          <Button type="button" variant="ghostSecondary" size="sm" onClick={cancelClientSelection}>
-            Cancelar seleção
-          </Button>
-        </div>
-      ) : null}
-
-      {loading ? (
-        <Card>
-          <CardContent className="flex items-center gap-3 pt-5 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Carregando clientes...
-          </CardContent>
-        </Card>
-      ) : filteredClients.length ? (
-        <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
-          {filteredClients.map((client) => (
-            <ClientCard
-              key={client.id}
-              client={client}
-              selectionMode={clientSelectionMode}
-              selected={selectedClientIds.includes(client.id)}
-              onToggleSelected={() => toggleClientSelection(client.id)}
-	              onArchiveToggle={() =>
-	                setClientConfirmAction({
-	                  kind: client.archived_at ? "unarchive" : "archive",
-	                  ids: [client.id],
-	                })
-	              }
-            />
+              {responsible}
+            </button>
           ))}
+        </aside>
+
+        <div className="min-w-0 space-y-4">
+          {clientSelectionMode ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
+              <span className="mr-auto font-medium text-foreground">
+                {selectedClientIds.length} selecionado{selectedClientIds.length === 1 ? "" : "s"}
+              </span>
+              {selectedClientIds.length ? (
+                showArchivedClients ? (
+                  <Button
+                    type="button"
+                    variant="ghostSecondary"
+                    size="sm"
+                    onClick={() => setClientConfirmAction({ kind: "unarchive", ids: selectedClientIds })}
+                    disabled={bulkActionLoading}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Desarquivar
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghostSecondary"
+                    size="sm"
+                    onClick={() => setClientConfirmAction({ kind: "archive", ids: selectedClientIds })}
+                    disabled={bulkActionLoading}
+                  >
+                    <Archive className="h-3.5 w-3.5" />
+                    Arquivar
+                  </Button>
+                )
+              ) : null}
+              {selectedClientIds.length ? (
+                <Button
+                  type="button"
+                  variant="ghostSecondary"
+                  size="sm"
+                  onClick={() => setClientConfirmAction({ kind: "delete", ids: selectedClientIds })}
+                  disabled={bulkActionLoading}
+                  className="text-rose-500 hover:text-rose-500"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Excluir
+                </Button>
+              ) : null}
+              <Button type="button" variant="ghostSecondary" size="sm" onClick={cancelClientSelection}>
+                Cancelar seleção
+              </Button>
+            </div>
+          ) : null}
+
+          {loading ? (
+            <Card>
+              <CardContent className="flex items-center gap-3 pt-5 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Carregando clientes...
+              </CardContent>
+            </Card>
+          ) : filteredClients.length ? (
+            <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
+              {filteredClients.map((client) => (
+                <ClientCard
+                  key={client.id}
+                  client={client}
+                  selectionMode={clientSelectionMode}
+                  selected={selectedClientIds.includes(client.id)}
+                  onToggleSelected={() => toggleClientSelection(client.id)}
+                  onArchiveToggle={() =>
+                    setClientConfirmAction({
+                      kind: client.archived_at ? "unarchive" : "archive",
+                      ids: [client.id],
+                    })
+                  }
+                />
+              ))}
+            </div>
+          ) : (
+            <Card className="border-dashed">
+              <CardContent className="pt-5 text-sm text-muted-foreground">
+                {clientSearch
+                  ? "Nenhum cliente encontrado com essa busca."
+                  : showArchivedClients
+                    ? "Nenhum cliente arquivado."
+                    : "Nenhum cliente cadastrado ainda. Crie o primeiro perfil para comecar."}
+              </CardContent>
+            </Card>
+          )}
         </div>
-      ) : (
-        <Card className="border-dashed">
-          <CardContent className="pt-5 text-sm text-muted-foreground">
-            {clientSearch
-              ? "Nenhum cliente encontrado com essa busca."
-              : showArchivedClients
-                ? "Nenhum cliente arquivado."
-              : "Nenhum cliente cadastrado ainda. Crie o primeiro perfil para comecar."}
-          </CardContent>
-        </Card>
-      )}
+      </div>
 
       {clientConfirmConfig ? (
         <div
@@ -907,7 +936,7 @@ export function ClientsManager() {
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground transition-colors focus-visible:outline-none focus-visible:ring-0 focus-visible:border-neutral-400 dark:focus-visible:border-white/35"
                 >
                   <option value="">Sem responsável</option>
-                  {responsibleOptions.map((responsible) => (
+                  {clientResponsibleOptions.map((responsible) => (
                     <option key={responsible} value={responsible}>
                       {responsible}
                     </option>

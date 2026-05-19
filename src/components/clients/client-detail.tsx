@@ -24,6 +24,7 @@ import {
 
 import { ClientAvatarInput } from "@/components/clients/client-avatar-input";
 import { ColorDotInput } from "@/components/clients/color-dot-input";
+import { AutoDismissToast } from "@/components/ui/auto-dismiss-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -1514,7 +1515,6 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
       });
       setIsProfileModalOpen(false);
       setProfileMessage("Perfil atualizado.");
-      window.setTimeout(() => setProfileMessage(null), 2200);
     }
 
     setSavingClientProfile(false);
@@ -1641,17 +1641,16 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
         </div>
       </div>
 
-      {profileMessage ? (
-        <p className="rounded-lg border border-emerald-600 bg-emerald-600 px-4 py-3 text-sm font-medium text-white">
-          {profileMessage}
-        </p>
-      ) : null}
-
-      {error && !creationMode ? (
-        <Card className="border-rose-600 bg-rose-600 text-white">
-          <CardContent className="pt-5 text-sm font-medium">{error}</CardContent>
-        </Card>
-      ) : null}
+      <AutoDismissToast
+        message={profileMessage}
+        variant="success"
+        onDismiss={() => setProfileMessage(null)}
+      />
+      <AutoDismissToast
+        message={!creationMode ? error : null}
+        variant="error"
+        onDismiss={() => setError(null)}
+      />
 
       <Tabs defaultValue="planejamentos" className="space-y-5 md:space-y-6">
         <TabsList className="grid h-auto w-full grid-cols-2 gap-3 border-0 bg-transparent p-0">
@@ -2009,35 +2008,6 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="sora-heading text-xl font-medium text-foreground">Apresentações</h2>
-                <div className="flex w-full justify-center sm:w-auto sm:justify-start">
-                  <div className="relative grid h-9 w-full max-w-[360px] grid-cols-4 rounded-lg border border-border bg-background p-1">
-                    <span
-                      className="absolute bottom-1 left-1 top-1 rounded-md bg-blue-500/[0.09] transition-transform duration-200 ease-out dark:bg-[var(--zacx-brand)]/15"
-                      style={{
-                        width: "calc((100% - 0.5rem) / 4)",
-                        transform: `translateX(${activePresentationTypeTabIndex * 100}%)`,
-                      }}
-                      aria-hidden="true"
-                    />
-                  {presentationTypeTabs.map((tab) => {
-                    const isActive = presentationType === tab.value;
-
-                    return (
-                      <button
-                        key={tab.value}
-                        type="button"
-                        onClick={() => setPresentationType(tab.value)}
-                        className={cn(
-                          "relative z-10 h-7 rounded-md px-2 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground sm:text-[11px]",
-                          isActive && "text-foreground dark:text-foreground",
-                        )}
-                      >
-                        {tab.label}
-                      </button>
-                    );
-                  })}
-                  </div>
-                </div>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
                 {presentationCounterText}
@@ -2049,6 +2019,36 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                 label="Criar nova apresentacao"
                 onClick={() => openCreationModal("visual")}
               />
+
+              <div className="order-last flex w-full justify-start pt-1 md:order-none md:ml-2 md:w-auto md:pt-0">
+                <div className="relative grid h-10 w-full max-w-[390px] grid-cols-4 rounded-lg border border-border bg-background p-1 md:w-[390px]">
+                  <span
+                    className="absolute bottom-1 left-1 top-1 rounded-md bg-neutral-200/80 transition-transform duration-200 ease-out dark:bg-white/[0.08]"
+                    style={{
+                      width: "calc((100% - 0.5rem) / 4)",
+                      transform: `translateX(${activePresentationTypeTabIndex * 100}%)`,
+                    }}
+                    aria-hidden="true"
+                  />
+                  {presentationTypeTabs.map((tab) => {
+                    const isActive = presentationType === tab.value;
+
+                    return (
+                      <button
+                        key={tab.value}
+                        type="button"
+                        onClick={() => setPresentationType(tab.value)}
+                        className={cn(
+                          "relative z-10 h-8 rounded-md px-2 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground sm:text-[11px]",
+                          isActive && "text-foreground dark:text-foreground",
+                        )}
+                      >
+                        {tab.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
               <Button
                 type="button"
