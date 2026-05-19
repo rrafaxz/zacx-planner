@@ -16,8 +16,65 @@ export type VisualPresentationWeek = {
   endDate: Date | null;
 };
 
+export type VisualPresentationWeekOverride = {
+  title?: string;
+  startLabel?: string;
+  endLabel?: string;
+};
+
+type VisualPresentationWeekNotesPayload = {
+  clientNotes: string | null;
+  weekOverrides: Record<string, VisualPresentationWeekOverride>;
+};
+
 const referenceYear = 2026;
 const dayInMs = 24 * 60 * 60 * 1000;
+const weekNotesPayloadVersion = 1;
+
+export function visualPresentationWeekNotesFromText(value?: string | null): VisualPresentationWeekNotesPayload {
+  if (!value) {
+    return {
+      clientNotes: null,
+      weekOverrides: {},
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(value) as {
+      zacxWeekNotesVersion?: number;
+      clientNotes?: string | null;
+      weekOverrides?: Record<string, VisualPresentationWeekOverride>;
+    };
+
+    if (parsed?.zacxWeekNotesVersion === weekNotesPayloadVersion) {
+      return {
+        clientNotes: parsed.clientNotes || null,
+        weekOverrides: parsed.weekOverrides || {},
+      };
+    }
+  } catch {
+    return {
+      clientNotes: value,
+      weekOverrides: {},
+    };
+  }
+
+  return {
+    clientNotes: value,
+    weekOverrides: {},
+  };
+}
+
+export function buildVisualPresentationWeekNotes(
+  clientNotes: string | null | undefined,
+  weekOverrides: Record<string, VisualPresentationWeekOverride>,
+) {
+  return JSON.stringify({
+    zacxWeekNotesVersion: weekNotesPayloadVersion,
+    clientNotes: clientNotes || null,
+    weekOverrides,
+  });
+}
 
 function atSafeNoon(date: Date) {
   const nextDate = new Date(date);
@@ -81,6 +138,55 @@ function dateRangeFromPresentation(presentation: VisualPresentation) {
   };
 }
 
+function rangeFromWeekOverride(override?: VisualPresentationWeekOverride | null) {
+  if (!override) return null;
+
+  const startLabel = formatDateInput(override.startLabel || "");
+  const endLabel = formatDateInput(override.endLabel || "");
+  const startDate = parseDayMonth(startLabel);
+  let endDate = parseDayMonth(endLabel);
+
+  if (!startDate || !endDate) return null;
+
+  if (endDate.getTime() < startDate.getTime()) {
+    endDate = parseDayMonth(endLabel, referenceYear + 1);
+  }
+
+  if (!endDate) return null;
+
+  return {
+    startDate,
+    endDate,
+    startLabel: formatDayMonth(startDate),
+    endLabel: formatDayMonth(endDate),
+  };
+}
+
+function applyWeekOverride(week: VisualPresentationWeek, override?: VisualPresentationWeekOverride) {
+  const overrideRange = rangeFromWeekOverride(override);
+  const title = override?.title?.trim().toUpperCase();
+  const actionLabel = title || week.actionLabel;
+
+  if (!overrideRange) {
+    return {
+      ...week,
+      label: title || week.label,
+      actionLabel,
+    };
+  }
+
+  return {
+    ...week,
+    label: title || week.label,
+    actionLabel,
+    startLabel: overrideRange.startLabel,
+    endLabel: overrideRange.endLabel,
+    periodLabel: `${overrideRange.startLabel} a ${overrideRange.endLabel}`,
+    startDate: overrideRange.startDate,
+    endDate: overrideRange.endDate,
+  };
+}
+
 export function visualPresentationPeriodKind(presentationType?: string | null) {
   const value = `${presentationType ?? ""}`
     .trim()
@@ -98,6 +204,7 @@ export function visualPresentationPeriodKind(presentationType?: string | null) {
 
 export function buildVisualPresentationWeeks(presentation: VisualPresentation): VisualPresentationWeek[] {
   const range = dateRangeFromPresentation(presentation);
+  const { weekOverrides } = visualPresentationWeekNotesFromText(presentation.client_notes);
 
   if (!range) {
     return [
@@ -112,7 +219,7 @@ export function buildVisualPresentationWeeks(presentation: VisualPresentation): 
         startDate: null,
         endDate: null,
       },
-    ] satisfies VisualPresentationWeek[];
+    ].map((week) => applyWeekOverride(week, weekOverrides[week.id])) satisfies VisualPresentationWeek[];
   }
 
   const totalDays = Math.max(1, Math.floor((range.endDate.getTime() - range.startDate.getTime()) / dayInMs) + 1);
@@ -122,7 +229,7 @@ export function buildVisualPresentationWeeks(presentation: VisualPresentation): 
       ? 1
       : periodKind === "quinzenal"
         ? 2
-        : Math.min(5, Math.max(4, Math.ceil(totalDays / 7)));
+        : Math.max(3, Math.ceil(totalDays / 7));
   const effectiveEndDate =
     periodKind === "quinzenal"
       ? maxDate(range.endDate, addDays(range.startDate, 13))
@@ -139,8 +246,10 @@ export function buildVisualPresentationWeeks(presentation: VisualPresentation): 
     const endDate = minDate(addDays(startDate, 6), effectiveEndDate);
     const label = `Semana ${index + 1}`;
 
-    weeks.push({
-      id: `week-${index + 1}`,
+    const id = `week-${index + 1}`;
+
+    weeks.push(applyWeekOverride({
+      id,
       index,
       label,
       actionLabel: `AP SEMANA ${index + 1}`,
@@ -149,7 +258,7 @@ export function buildVisualPresentationWeeks(presentation: VisualPresentation): 
       periodLabel: `${formatDayMonth(startDate)} a ${formatDayMonth(endDate)}`,
       startDate,
       endDate,
-    });
+    }, weekOverrides[id]));
   }
 
   return weeks.length

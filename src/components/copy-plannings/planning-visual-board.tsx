@@ -156,7 +156,7 @@ function VisualDetailBlock({
           <span className="h-2 w-2 rounded-full" style={{ backgroundColor: accentColor }} />
           <p
             className="text-xs font-medium uppercase tracking-normal text-muted-foreground"
-            style={{ fontFamily: "Sora, Poppins, Arial, sans-serif" }}
+            style={{ fontFamily: "var(--font-sora), Sora, var(--font-poppins), Poppins, sans-serif" }}
           >
             {label}
           </p>
@@ -396,7 +396,7 @@ export function PlanningVisualBoard({
               type="button"
               onClick={() => setSelectedItem(item)}
               className="group flex aspect-[1.04/1] min-h-[156px] flex-col overflow-hidden rounded-2xl border border-neutral-900 bg-background text-center shadow-none transition hover:-translate-y-0.5 hover:border-black hover:bg-secondary/20 dark:border-white/30 dark:hover:border-white/40 sm:min-h-[220px]"
-              style={{ fontFamily: "Sora, Poppins, Arial, sans-serif" }}
+              style={{ fontFamily: "var(--font-sora), Sora, var(--font-poppins), Poppins, sans-serif" }}
             >
               <div
                 className="flex min-h-11 items-center justify-center border-b border-neutral-900 px-2 py-2 text-xs font-semibold uppercase tracking-normal dark:border-white/30 sm:min-h-14 sm:px-4 sm:py-3 sm:text-sm md:text-base"
@@ -431,7 +431,7 @@ export function PlanningVisualBoard({
           <div
             className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border/70 bg-background p-4 shadow-none md:p-6"
             onClick={(event) => event.stopPropagation()}
-            style={{ fontFamily: "Sora, Poppins, Arial, sans-serif" }}
+            style={{ fontFamily: "var(--font-sora), Sora, var(--font-poppins), Poppins, sans-serif" }}
           >
               <div className="flex items-start justify-between gap-4 border-b border-border/70 pb-5">
               <div>
@@ -690,7 +690,7 @@ export function PlanningVisualBoard({
               <div
                 className="w-full max-w-md rounded-2xl border border-border/70 bg-background p-4 shadow-none sm:p-5"
                 onClick={(event) => event.stopPropagation()}
-                style={{ fontFamily: "Sora, Poppins, Arial, sans-serif" }}
+                style={{ fontFamily: "var(--font-sora), Sora, var(--font-poppins), Poppins, sans-serif" }}
               >
                 <div className="mb-4 flex items-center gap-3">
                   <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: selectedColors.detail }} />

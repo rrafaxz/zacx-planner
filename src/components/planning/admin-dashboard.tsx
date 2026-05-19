@@ -3,24 +3,33 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Activity,
   Archive,
-  Clock3,
+  BarChart3,
+  Crown,
   FileText,
-  Image,
   Images,
   Layers3,
   Plus,
+  Settings2,
+  Trophy,
   UsersRound,
 } from "lucide-react";
 
+import { ClientAvatarDisplay } from "@/components/clients/client-detail";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
 
 type DashboardClient = {
   id: string;
   name: string;
+  logo_url: string | null;
+  primary_color: string | null;
+  responsible_name: string | null;
+  archived_at: string | null;
+  deleted_at: string | null;
   created_at: string | null;
 };
 
@@ -56,10 +65,11 @@ type DashboardData = {
 type DashboardFilters = {
   clientId: string;
   month: string;
-  type: "all" | "planning" | "presentation";
+  responsible: "all" | "none" | "Rafael" | "Matheus";
   status: "all" | "active" | "archived";
 };
 
+const responsibleOptions = ["Rafael", "Matheus"] as const;
 const monthOptions = [
   { value: "all", label: "Todos os meses" },
   { value: "01", label: "JAN" },
@@ -75,7 +85,6 @@ const monthOptions = [
   { value: "11", label: "NOV" },
   { value: "12", label: "DEZ" },
 ];
-
 const compactSelectClass =
   "h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus:border-neutral-400 dark:focus:border-white/35";
 
@@ -84,9 +93,7 @@ function createdMonth(value?: string | null) {
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) return "";
-
-  return String(date.getMonth() + 1).padStart(2, "0");
+  return Number.isNaN(date.getTime()) ? "" : String(date.getMonth() + 1).padStart(2, "0");
 }
 
 function normalizeFormat(format?: string | null) {
@@ -98,61 +105,102 @@ function normalizeFormat(format?: string | null) {
   return "post";
 }
 
-function sparklinePoints(values: number[]) {
-  if (!values.length) return "";
-
-  const width = 120;
-  const height = 36;
-  const max = Math.max(...values, 1);
-
-  return values
-    .map((value, index) => {
-      const x = values.length === 1 ? width : (index / (values.length - 1)) * width;
-      const y = height - (value / max) * (height - 4) - 2;
-
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-}
-
-function Sparkline({ values }: { values: number[] }) {
-  const points = sparklinePoints(values);
-
-  return (
-    <svg viewBox="0 0 120 36" className="h-9 w-24 overflow-visible" aria-hidden="true">
-      <polyline
-        fill="none"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="2.5"
-        points={points}
-        className="text-[var(--zacx-brand)]"
-      />
-    </svg>
-  );
-}
-
-function buildMonthlySeries(items: Array<{ created_at: string | null }>) {
-  const counts = Array.from({ length: 6 }, () => 0);
+function lastSixMonthLabels() {
   const now = new Date();
 
+  return Array.from({ length: 6 }, (_, index) => {
+    const date = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1);
+
+    return {
+      key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`,
+      label: date.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "").toUpperCase(),
+    };
+  });
+}
+
+function monthKey(value?: string | null) {
+  if (!value) return "";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "";
+
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function monthlySeries(items: Array<{ created_at: string | null }>) {
+  const labels = lastSixMonthLabels();
+  const counts = new Map(labels.map((label) => [label.key, 0]));
+
   items.forEach((item) => {
-    if (!item.created_at) return;
+    const key = monthKey(item.created_at);
 
-    const date = new Date(item.created_at);
-
-    if (Number.isNaN(date.getTime())) return;
-
-    const diff =
-      (now.getFullYear() - date.getFullYear()) * 12 + (now.getMonth() - date.getMonth());
-
-    if (diff >= 0 && diff < 6) {
-      counts[5 - diff] += 1;
+    if (counts.has(key)) {
+      counts.set(key, (counts.get(key) ?? 0) + 1);
     }
   });
 
-  return counts;
+  return labels.map((label) => ({
+    label: label.label,
+    value: counts.get(label.key) ?? 0,
+  }));
+}
+
+function BarChart({
+  title,
+  data,
+  emptyLabel,
+}: {
+  title: string;
+  data: Array<{ label: string; value: number }>;
+  emptyLabel: string;
+}) {
+  const maxValue = Math.max(...data.map((item) => item.value), 0);
+
+  return (
+    <Card className="bg-background shadow-none">
+      <CardHeader>
+        <CardTitle className="text-base">{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {maxValue ? (
+          <div className="grid gap-3">
+            {data.map((item) => (
+              <div key={item.label} className="grid grid-cols-[76px_1fr_36px] items-center gap-3 text-sm">
+                <span className="text-xs text-muted-foreground">{item.label}</span>
+                <span className="h-2.5 overflow-hidden rounded-full bg-foreground/[0.08]">
+                  <span
+                    className="block h-full rounded-full bg-[var(--zacx-brand)]"
+                    style={{ width: `${Math.max(8, (item.value / maxValue) * 100)}%` }}
+                  />
+                </span>
+                <span className="text-right text-xs font-medium text-foreground">{item.value}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">{emptyLabel}</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function metricCard(label: string, value: number | string, description: string, Icon: typeof UsersRound) {
+  return (
+    <Card key={label} className="border-border/70 bg-background shadow-none">
+      <CardHeader className="flex-row items-start justify-between gap-3 p-4 pb-2 md:p-5 md:pb-3">
+        <div>
+          <CardDescription className="text-xs md:text-sm">{label}</CardDescription>
+          <CardTitle className="mt-2 text-2xl md:mt-3 md:text-3xl">{value}</CardTitle>
+        </div>
+        <Icon className="h-5 w-5 text-muted-foreground" />
+      </CardHeader>
+      <CardContent className="hidden px-4 pb-4 md:block md:px-5 md:pb-5">
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </CardContent>
+    </Card>
+  );
 }
 
 export function AdminDashboard() {
@@ -166,109 +214,201 @@ export function AdminDashboard() {
   const [filters, setFilters] = useState<DashboardFilters>({
     clientId: "all",
     month: "all",
-    type: "all",
+    responsible: "all",
     status: "all",
   });
+  const [savingResponsibleId, setSavingResponsibleId] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function loadMetrics() {
-      setLoading(true);
-      setError(null);
+  async function loadMetrics() {
+    setLoading(true);
+    setError(null);
 
-      const [clients, copyPlannings, visualPresentations, visualItems, visualImages] =
-        await Promise.all([
-          supabase.from("clients").select("id, name, created_at").order("name", { ascending: true }),
-          supabase
-            .from("copy_plannings")
-            .select("id, client_id, created_at, archived_at, deleted_at"),
-          supabase
-            .from("visual_presentations")
-            .select("id, client_id, created_at, archived_at, deleted_at"),
-          supabase.from("visual_items").select("id, visual_presentation_id, format, created_at"),
-          supabase.from("visual_item_images").select("id, visual_item_id, created_at"),
-        ]);
+    const [clients, copyPlannings, visualPresentations, visualItems, visualImages] =
+      await Promise.all([
+        supabase
+          .from("clients")
+          .select("id, name, logo_url, primary_color, responsible_name, archived_at, deleted_at, created_at")
+          .is("deleted_at", null)
+          .order("name", { ascending: true }),
+        supabase
+          .from("copy_plannings")
+          .select("id, client_id, created_at, archived_at, deleted_at"),
+        supabase
+          .from("visual_presentations")
+          .select("id, client_id, created_at, archived_at, deleted_at"),
+        supabase.from("visual_items").select("id, visual_presentation_id, format, created_at"),
+        supabase.from("visual_item_images").select("id, visual_item_id, created_at"),
+      ]);
 
-      const firstError =
-        clients.error ||
-        copyPlannings.error ||
-        visualPresentations.error ||
-        visualItems.error ||
-        visualImages.error;
+    const firstError =
+      clients.error ||
+      copyPlannings.error ||
+      visualPresentations.error ||
+      visualItems.error ||
+      visualImages.error;
 
-      if (firstError) {
-        setError(firstError.message);
-      } else {
-        setData({
-          clients: (clients.data ?? []) as DashboardClient[],
-          copyPlannings: (copyPlannings.data ?? []) as DashboardDeliverable[],
-          visualPresentations: (visualPresentations.data ?? []) as DashboardDeliverable[],
-          visualItems: (visualItems.data ?? []) as DashboardVisualItem[],
-          visualImages: (visualImages.data ?? []) as DashboardVisualImage[],
-        });
-      }
-
-      setLoading(false);
+    if (firstError) {
+      setError(firstError.message);
+    } else {
+      setData({
+        clients: (clients.data ?? []) as DashboardClient[],
+        copyPlannings: (copyPlannings.data ?? []) as DashboardDeliverable[],
+        visualPresentations: (visualPresentations.data ?? []) as DashboardDeliverable[],
+        visualItems: (visualItems.data ?? []) as DashboardVisualItem[],
+        visualImages: (visualImages.data ?? []) as DashboardVisualImage[],
+      });
     }
 
+    setLoading(false);
+  }
+
+  useEffect(() => {
     loadMetrics();
   }, []);
 
-  const filtered = useMemo(() => {
-    const presentationIds = new Set(
-      data.visualPresentations
-        .filter((presentation) => {
-          const matchesClient =
-            filters.clientId === "all" || presentation.client_id === filters.clientId;
-          const matchesMonth =
-            filters.month === "all" || createdMonth(presentation.created_at) === filters.month;
-          const matchesStatus =
-            filters.status === "all" ||
-            (filters.status === "archived"
-              ? Boolean(presentation.archived_at)
-              : !presentation.archived_at && !presentation.deleted_at);
-
-          return matchesClient && matchesMonth && matchesStatus && !presentation.deleted_at;
-        })
-        .map((presentation) => presentation.id),
+  const maps = useMemo(() => {
+    const clientsById = new Map(data.clients.map((client) => [client.id, client]));
+    const presentationsById = new Map(data.visualPresentations.map((presentation) => [presentation.id, presentation]));
+    const itemPresentationMap = new Map(
+      data.visualItems.map((item) => [item.id, item.visual_presentation_id]),
     );
-    const visualItemIds = new Set<string>();
 
+    return { clientsById, presentationsById, itemPresentationMap };
+  }, [data]);
+
+  const visibleClients = useMemo(
+    () =>
+      data.clients.filter((client) => {
+        const matchesClient = filters.clientId === "all" || client.id === filters.clientId;
+        const matchesResponsible =
+          filters.responsible === "all" ||
+          (filters.responsible === "none"
+            ? !client.responsible_name
+            : client.responsible_name === filters.responsible);
+        const matchesStatus =
+          filters.status === "all" ||
+          (filters.status === "archived" ? Boolean(client.archived_at) : !client.archived_at);
+
+        return matchesClient && matchesResponsible && matchesStatus;
+      }),
+    [data.clients, filters.clientId, filters.responsible, filters.status],
+  );
+  const visibleClientIds = useMemo(() => new Set(visibleClients.map((client) => client.id)), [visibleClients]);
+  const filtered = useMemo(() => {
     const copyPlannings = data.copyPlannings.filter((planning) => {
-      const matchesClient = filters.clientId === "all" || planning.client_id === filters.clientId;
+      const matchesClient = Boolean(planning.client_id && visibleClientIds.has(planning.client_id));
       const matchesMonth = filters.month === "all" || createdMonth(planning.created_at) === filters.month;
       const matchesStatus =
         filters.status === "all" ||
-        (filters.status === "archived"
-          ? Boolean(planning.archived_at)
-          : !planning.archived_at && !planning.deleted_at);
+        (filters.status === "archived" ? Boolean(planning.archived_at) : !planning.archived_at);
 
       return matchesClient && matchesMonth && matchesStatus && !planning.deleted_at;
     });
-    const visualPresentations = data.visualPresentations.filter((presentation) =>
-      presentationIds.has(presentation.id),
-    );
-    const visualItems = data.visualItems.filter((item) => {
-      const matches = Boolean(item.visual_presentation_id && presentationIds.has(item.visual_presentation_id));
+    const visualPresentations = data.visualPresentations.filter((presentation) => {
+      const matchesClient = Boolean(presentation.client_id && visibleClientIds.has(presentation.client_id));
+      const matchesMonth = filters.month === "all" || createdMonth(presentation.created_at) === filters.month;
+      const matchesStatus =
+        filters.status === "all" ||
+        (filters.status === "archived" ? Boolean(presentation.archived_at) : !presentation.archived_at);
 
-      if (matches) {
-        visualItemIds.add(item.id);
-      }
-
-      return matches;
+      return matchesClient && matchesMonth && matchesStatus && !presentation.deleted_at;
     });
-    const visualImages = data.visualImages.filter(
-      (image) => Boolean(image.visual_item_id && visualItemIds.has(image.visual_item_id)),
+    const presentationIds = new Set(visualPresentations.map((presentation) => presentation.id));
+    const visualItems = data.visualItems.filter((item) =>
+      Boolean(item.visual_presentation_id && presentationIds.has(item.visual_presentation_id)),
+    );
+    const visualItemIds = new Set(visualItems.map((item) => item.id));
+    const visualImages = data.visualImages.filter((image) =>
+      Boolean(image.visual_item_id && visualItemIds.has(image.visual_item_id)),
     );
 
-    return {
-      copyPlannings: filters.type === "presentation" ? [] : copyPlannings,
-      visualPresentations: filters.type === "planning" ? [] : visualPresentations,
-      visualItems: filters.type === "planning" ? [] : visualItems,
-      visualImages: filters.type === "planning" ? [] : visualImages,
-    };
-  }, [data, filters]);
+    return { copyPlannings, visualPresentations, visualItems, visualImages };
+  }, [data, filters.month, filters.status, visibleClientIds]);
+
+  const demandByClient = useMemo(() => {
+    return data.clients
+      .filter((client) => !client.archived_at && !client.deleted_at)
+      .map((client) => {
+        const plannings = data.copyPlannings.filter(
+          (planning) => planning.client_id === client.id && !planning.deleted_at,
+        ).length;
+        const presentations = data.visualPresentations.filter(
+          (presentation) => presentation.client_id === client.id && !presentation.deleted_at,
+        );
+        const presentationIds = new Set(presentations.map((presentation) => presentation.id));
+        const visualItems = data.visualItems.filter((item) =>
+          Boolean(item.visual_presentation_id && presentationIds.has(item.visual_presentation_id)),
+        ).length;
+
+        return {
+          client,
+          plannings,
+          presentations: presentations.length,
+          visualItems,
+          total: plannings + presentations.length + visualItems,
+        };
+      })
+      .sort((left, right) => right.total - left.total || left.client.name.localeCompare(right.client.name, "pt-BR"));
+  }, [data]);
+
+  const responsibleGroups = useMemo(() => {
+    return [
+      { label: "Clientes do Rafael", value: "Rafael" },
+      { label: "Clientes do Matheus", value: "Matheus" },
+      { label: "Sem responsável", value: "" },
+    ].map((group) => {
+      const clients = data.clients.filter((client) =>
+        group.value ? client.responsible_name === group.value : !client.responsible_name,
+      ).filter((client) => !client.archived_at && !client.deleted_at);
+      const clientIds = new Set(clients.map((client) => client.id));
+      const plannings = data.copyPlannings.filter((planning) =>
+        Boolean(planning.client_id && clientIds.has(planning.client_id) && !planning.deleted_at),
+      );
+      const presentations = data.visualPresentations.filter((presentation) =>
+        Boolean(presentation.client_id && clientIds.has(presentation.client_id) && !presentation.deleted_at),
+      );
+      const presentationIds = new Set(presentations.map((presentation) => presentation.id));
+      const visualItems = data.visualItems.filter((item) =>
+        Boolean(item.visual_presentation_id && presentationIds.has(item.visual_presentation_id)),
+      );
+
+      return {
+        ...group,
+        clients,
+        plannings: plannings.length,
+        presentations: presentations.length,
+        visualItems: visualItems.length,
+      };
+    });
+  }, [data]);
+
+  async function updateClientResponsible(clientId: string, responsibleName: string) {
+    setSavingResponsibleId(clientId);
+    setError(null);
+
+    const { error: requestError } = await supabase
+      .from("clients")
+      .update({ responsible_name: responsibleName || null } as never)
+      .eq("id", clientId);
+
+    if (requestError) {
+      setError(requestError.message);
+    } else {
+      setData((current) => ({
+        ...current,
+        clients: current.clients.map((client) =>
+          client.id === clientId ? { ...client, responsible_name: responsibleName || null } : client,
+        ),
+      }));
+      setMessage("Responsável atualizado.");
+      window.setTimeout(() => setMessage(null), 1800);
+    }
+
+    setSavingResponsibleId(null);
+  }
 
   const activePlannings = filtered.copyPlannings.filter((planning) => !planning.archived_at).length;
   const activePresentations = filtered.visualPresentations.filter((presentation) => !presentation.archived_at).length;
@@ -278,85 +418,33 @@ export function AdminDashboard() {
   const posts = filtered.visualItems.filter((item) => normalizeFormat(item.format) === "post").length;
   const carousels = filtered.visualItems.filter((item) => normalizeFormat(item.format) === "carousel").length;
   const stories = filtered.visualItems.filter((item) => normalizeFormat(item.format) === "stories").length;
-  const visualItemCount = filtered.visualItems.length;
-  const visualImageCount = filtered.visualImages.length;
-  const recentActivity = [
-    ...filtered.copyPlannings,
-    ...filtered.visualPresentations,
-    ...filtered.visualItems,
-  ].filter((item) => item.created_at);
-  const recentCutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  const recentActivityCount = recentActivity.filter((item) => {
-    const createdAt = item.created_at ? new Date(item.created_at).getTime() : 0;
+  const deliverableSeries = monthlySeries([...filtered.copyPlannings, ...filtered.visualPresentations]);
+  const responsibleSeries = responsibleOptions.map((responsible) => {
+    const clientIds = new Set(
+      data.clients.filter((client) => client.responsible_name === responsible).map((client) => client.id),
+    );
+    const plannings = data.copyPlannings.filter((planning) =>
+      Boolean(planning.client_id && clientIds.has(planning.client_id) && !planning.deleted_at),
+    ).length;
+    const presentations = data.visualPresentations.filter((presentation) =>
+      Boolean(presentation.client_id && clientIds.has(presentation.client_id) && !presentation.deleted_at),
+    ).length;
 
-    return createdAt >= recentCutoff;
-  }).length;
-  const deliverables = [...filtered.copyPlannings, ...filtered.visualPresentations];
-
-  const cards = [
-    {
-      label: "Total de clientes",
-      value: filters.clientId === "all" ? data.clients.length : 1,
-      description: "Perfis na biblioteca",
-      icon: UsersRound,
-      series: buildMonthlySeries(data.clients),
-    },
-    {
-      label: "Planejamentos ativos",
-      value: activePlannings,
-      description: "Documentos fora dos arquivados",
-      icon: FileText,
-      series: buildMonthlySeries(filtered.copyPlannings),
-    },
-    {
-      label: "Apresentações ativas",
-      value: activePresentations,
-      description: "Pranchas fora dos arquivados",
-      icon: Images,
-      series: buildMonthlySeries(filtered.visualPresentations),
-    },
-    {
-      label: "Itens arquivados",
-      value: archivedItems,
-      description: "Planejamentos e apresentações",
-      icon: Archive,
-      series: buildMonthlySeries(deliverables.filter((item) => Boolean(item.archived_at))),
-    },
-    {
-      label: "Publicações visuais",
-      value: visualItemCount,
-      description: "Posts, carrosséis e stories",
-      icon: Layers3,
-      series: buildMonthlySeries(filtered.visualItems),
-    },
-    {
-      label: "Posts",
-      value: posts,
-      description: "Itens de feed únicos",
-      icon: Image,
-      series: buildMonthlySeries(filtered.visualItems.filter((item) => normalizeFormat(item.format) === "post")),
-    },
-    {
-      label: "Carrosséis",
-      value: carousels,
-      description: "Itens com múltiplas artes",
-      icon: Images,
-      series: buildMonthlySeries(filtered.visualItems.filter((item) => normalizeFormat(item.format) === "carousel")),
-    },
-    {
-      label: "Stories e imagens",
-      value: `${stories}/${visualImageCount}`,
-      description: "Stories / imagens enviadas",
-      icon: Clock3,
-      series: buildMonthlySeries(filtered.visualImages),
-    },
-    {
-      label: "Atividade recente",
-      value: recentActivityCount,
-      description: "Criados nos últimos 7 dias",
-      icon: Activity,
-      series: buildMonthlySeries(recentActivity),
-    },
+    return { label: responsible, value: plannings + presentations };
+  });
+  const filteredTopClients = demandByClient.slice(0, 6).map((item) => ({
+    label: item.client.name,
+    value: item.total,
+  }));
+  const metrics = [
+    metricCard("Clientes ativos", visibleClients.filter((client) => !client.archived_at).length, "Perfis ativos na seleção", UsersRound),
+    metricCard("Planejamentos ativos", activePlannings, "Documentos fora dos arquivados", FileText),
+    metricCard("Apresentações ativas", activePresentations, "Pranchas fora dos arquivados", Images),
+    metricCard("Itens arquivados", archivedItems, "Planejamentos e apresentações", Archive),
+    metricCard("Publicações visuais", filtered.visualItems.length, "Posts, carrosséis e stories", Layers3),
+    metricCard("Posts", posts, "Itens únicos de feed", FileText),
+    metricCard("Carrosséis", carousels, "Itens de múltiplas artes", Images),
+    metricCard("Stories", stories, "Itens de stories", Layers3),
   ];
 
   return (
@@ -364,10 +452,10 @@ export function AdminDashboard() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="sora-heading mt-2 text-2xl font-medium tracking-normal text-foreground md:text-4xl">
-            Controle de conteudo e apresentacoes
+            Controle de clientes
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground md:mt-3">
-            Acompanhe clientes, documentos de copy e apresentacoes visuais.
+            Acompanhe demanda, responsáveis, planejamentos e apresentações visuais.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -383,91 +471,226 @@ export function AdminDashboard() {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <select
-          value={filters.clientId}
-          onChange={(event) => setFilters((current) => ({ ...current, clientId: event.target.value }))}
-          className={compactSelectClass}
-        >
-          <option value="all">Todos os clientes</option>
-          {data.clients.map((client) => (
-            <option key={client.id} value={client.id}>
-              {client.name}
-            </option>
-          ))}
-        </select>
-        <select
-          value={filters.month}
-          onChange={(event) => setFilters((current) => ({ ...current, month: event.target.value }))}
-          className={compactSelectClass}
-        >
-          {monthOptions.map((month) => (
-            <option key={month.value} value={month.value}>
-              {month.label}
-            </option>
-          ))}
-        </select>
-        <select
-          value={filters.type}
-          onChange={(event) =>
-            setFilters((current) => ({
-              ...current,
-              type: event.target.value as DashboardFilters["type"],
-            }))
-          }
-          className={compactSelectClass}
-        >
-          <option value="all">Tudo</option>
-          <option value="planning">Planejamentos</option>
-          <option value="presentation">Apresentações</option>
-        </select>
-        <select
-          value={filters.status}
-          onChange={(event) =>
-            setFilters((current) => ({
-              ...current,
-              status: event.target.value as DashboardFilters["status"],
-            }))
-          }
-          className={compactSelectClass}
-        >
-          <option value="all">Ativos e arquivados</option>
-          <option value="active">Ativos</option>
-          <option value="archived">Arquivados</option>
-        </select>
-      </div>
-
       {error ? (
         <Card className="border-rose-600 bg-rose-600 text-white">
           <CardContent className="pt-5 text-sm font-medium">{error}</CardContent>
         </Card>
       ) : null}
+      {message ? (
+        <Card className="border-emerald-600 bg-emerald-600 text-white">
+          <CardContent className="pt-5 text-sm font-medium">{message}</CardContent>
+        </Card>
+      ) : null}
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-        {cards.map((card) => {
-          const Icon = card.icon;
+      <Tabs defaultValue="graficos" className="space-y-5">
+        <TabsList className="grid h-auto w-full grid-cols-3 gap-2 border-0 bg-transparent p-0 sm:w-auto sm:inline-grid">
+          {[
+            { value: "graficos", label: "Gráficos", icon: BarChart3 },
+            { value: "configuracoes", label: "Configurações", icon: Settings2 },
+            { value: "ranking", label: "Ranking", icon: Trophy },
+          ].map((tab) => {
+            const Icon = tab.icon;
 
-          return (
-            <Card key={card.label} className="border-border/70 bg-background shadow-none">
-              <CardHeader className="flex-row items-start justify-between gap-3 p-4 pb-2 md:p-5 md:pb-3">
-                <div>
-                  <CardDescription className="text-xs md:text-sm">{card.label}</CardDescription>
-                  <CardTitle className="mt-2 text-2xl md:mt-3 md:text-3xl">
-                    {loading ? "--" : card.value}
-                  </CardTitle>
-                </div>
-                <Icon className="h-5 w-5 text-muted-foreground" />
-              </CardHeader>
-              <CardContent className="px-4 pb-4 md:px-5 md:pb-5">
-                <div className="mb-2 text-muted-foreground">
-                  <Sparkline values={card.series} />
-                </div>
-                <p className="hidden text-sm text-muted-foreground md:block">{card.description}</p>
+            return (
+              <TabsTrigger
+                key={tab.value}
+                value={tab.value}
+                className="h-10 gap-2 rounded-md border border-border bg-background px-3 text-sm text-muted-foreground data-[state=active]:border-foreground/30 data-[state=active]:bg-background data-[state=active]:text-foreground"
+              >
+                <Icon className="h-4 w-4" />
+                {tab.label}
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
+
+        <TabsContent value="graficos" className="space-y-5">
+          <div className="flex flex-wrap gap-2">
+            <select
+              value={filters.clientId}
+              onChange={(event) => setFilters((current) => ({ ...current, clientId: event.target.value }))}
+              className={compactSelectClass}
+            >
+              <option value="all">Todos os clientes</option>
+              {data.clients.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={filters.month}
+              onChange={(event) => setFilters((current) => ({ ...current, month: event.target.value }))}
+              className={compactSelectClass}
+            >
+              {monthOptions.map((month) => (
+                <option key={month.value} value={month.value}>
+                  {month.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={filters.responsible}
+              onChange={(event) =>
+                setFilters((current) => ({
+                  ...current,
+                  responsible: event.target.value as DashboardFilters["responsible"],
+                }))
+              }
+              className={compactSelectClass}
+            >
+              <option value="all">Todos responsáveis</option>
+              {responsibleOptions.map((responsible) => (
+                <option key={responsible} value={responsible}>
+                  {responsible}
+                </option>
+              ))}
+              <option value="none">Sem responsável</option>
+            </select>
+            <select
+              value={filters.status}
+              onChange={(event) =>
+                setFilters((current) => ({
+                  ...current,
+                  status: event.target.value as DashboardFilters["status"],
+                }))
+              }
+              className={compactSelectClass}
+            >
+              <option value="all">Ativos e arquivados</option>
+              <option value="active">Ativos</option>
+              <option value="archived">Arquivados</option>
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+            {metrics.map((card) => card)}
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <BarChart
+              title="Evolução de entregas por mês"
+              data={deliverableSeries}
+              emptyLabel={loading ? "Carregando dados..." : "Nenhuma entrega encontrada no período."}
+            />
+            <BarChart
+              title="Demanda por responsável"
+              data={responsibleSeries}
+              emptyLabel={loading ? "Carregando dados..." : "Nenhum responsável com entregas ainda."}
+            />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="configuracoes" className="space-y-5">
+          <div className="grid gap-4 lg:grid-cols-3">
+            {responsibleGroups.map((group) => (
+              <Card key={group.label} className="bg-background shadow-none">
+                <CardHeader>
+                  <CardTitle className="text-base">{group.label}</CardTitle>
+                  <CardDescription>{group.clients.length} cliente{group.clients.length === 1 ? "" : "s"}</CardDescription>
+                </CardHeader>
+                <CardContent className="grid grid-cols-3 gap-2 text-center text-xs text-muted-foreground">
+                  <span><strong className="block text-base text-foreground">{group.plannings}</strong>Planej.</span>
+                  <span><strong className="block text-base text-foreground">{group.presentations}</strong>APs</span>
+                  <span><strong className="block text-base text-foreground">{group.visualItems}</strong>Itens</span>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          <div className="grid gap-3">
+            {data.clients.filter((client) => !client.archived_at && !client.deleted_at).map((client) => (
+              <Card key={client.id} className="bg-background shadow-none">
+                <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <ClientAvatarDisplay
+                      name={client.name}
+                      logoUrl={client.logo_url}
+                      accentColor={client.primary_color || "#E5E7EB"}
+                      className="h-11 w-11 text-base"
+                    />
+                    <div className="min-w-0">
+                      <h3 className="sora-heading truncate text-sm font-medium text-foreground">{client.name}</h3>
+                      <p className="text-xs text-muted-foreground">
+                        {client.responsible_name ? `Responsável: ${client.responsible_name}` : "Sem responsável"}
+                      </p>
+                    </div>
+                  </div>
+                  <select
+                    value={client.responsible_name || ""}
+                    onChange={(event) => updateClientResponsible(client.id, event.target.value)}
+                    disabled={savingResponsibleId === client.id}
+                    className={cn(compactSelectClass, "w-full sm:w-48")}
+                  >
+                    <option value="">Sem responsável</option>
+                    {responsibleOptions.map((responsible) => (
+                      <option key={responsible} value={responsible}>
+                        {responsible}
+                      </option>
+                    ))}
+                  </select>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="ranking" className="space-y-4">
+          {demandByClient.length ? (
+            demandByClient.map((item, index) => (
+              <Card
+                key={item.client.id}
+                className={cn(
+                  "bg-background shadow-none",
+                  index < 5 && "border-amber-300/70 dark:border-amber-400/40",
+                )}
+              >
+                <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+                  <div className="relative shrink-0">
+                    <ClientAvatarDisplay
+                      name={item.client.name}
+                      logoUrl={item.client.logo_url}
+                      accentColor={item.client.primary_color}
+                      className="h-12 w-12 text-base"
+                    />
+                    {index < 5 ? (
+                      <span className="absolute -left-2 -top-2 grid h-7 w-7 place-items-center rounded-full border border-amber-300/80 bg-background text-amber-500">
+                        <Crown className="h-4 w-4 fill-amber-400 text-amber-500" />
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="shrink-0 text-xs font-semibold text-muted-foreground">{index + 1}º</span>
+                      <h3 className="sora-heading truncate text-base font-medium text-foreground">{item.client.name}</h3>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Responsável: {item.client.responsible_name || "Sem responsável"}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 text-right text-xs text-muted-foreground sm:min-w-[320px]">
+                    <span><strong className="block text-base text-foreground">{item.plannings}</strong>Planej.</span>
+                    <span><strong className="block text-base text-foreground">{item.presentations}</strong>APs</span>
+                    <span><strong className="block text-base text-foreground">{item.total}</strong>Total</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            <Card className="border-dashed bg-background shadow-none">
+              <CardContent className="pt-5 text-sm text-muted-foreground">
+                Nenhum cliente com demanda registrada ainda.
               </CardContent>
             </Card>
-          );
-        })}
-      </div>
+          )}
+
+          <BarChart
+            title="Clientes com mais demanda"
+            data={filteredTopClients}
+            emptyLabel="Nenhum dado suficiente para ranking."
+          />
+        </TabsContent>
+      </Tabs>
     </section>
   );
 }

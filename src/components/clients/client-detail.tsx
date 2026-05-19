@@ -63,6 +63,7 @@ type ClientProfileForm = {
   logoUrl: string | null;
   primaryColor: string;
   secondaryColor: string;
+  responsibleName: string;
 };
 
 type CreationMode = "copy" | "visual" | null;
@@ -70,6 +71,16 @@ type MonthFilter = "all" | string;
 type PlanningSort = "recent" | "oldest" | "az" | "za" | "more-content" | "less-content";
 type PresentationSort = "recent" | "oldest" | "az" | "za" | "more-art" | "less-art";
 type PresentationTypeFilter = "all" | "semanal" | "quinzenal" | "mensal";
+type LibraryConfirmAction = {
+  kind:
+    | "archive-planning"
+    | "unarchive-planning"
+    | "delete-planning"
+    | "archive-presentation"
+    | "unarchive-presentation"
+    | "delete-presentation";
+  ids: string[];
+} | null;
 
 type CopyPlanningWithPreview = CopyPlanning & {
   start_display_date?: string | null;
@@ -112,7 +123,10 @@ const initialClientProfileForm: ClientProfileForm = {
   logoUrl: null,
   primaryColor: "#A3E635",
   secondaryColor: "#60A5FA",
+  responsibleName: "",
 };
+
+const responsibleOptions = ["Rafael", "Matheus"] as const;
 
 const presentationTypeLabels: Record<string, string> = {
   weekly: "Semanal",
@@ -129,6 +143,13 @@ const visualPresentationTypeOptions = [
   { value: "mensal", label: "Mensal" },
 ] as const;
 
+const presentationTypeTabs: Array<{ value: PresentationTypeFilter; label: string }> = [
+  { value: "all", label: "Todas" },
+  { value: "semanal", label: "Semanais" },
+  { value: "quinzenal", label: "Quinzenais" },
+  { value: "mensal", label: "Mensais" },
+];
+
 const monthAbbreviations = [
   "JAN",
   "FEV",
@@ -142,6 +163,21 @@ const monthAbbreviations = [
   "OUT",
   "NOV",
   "DEZ",
+];
+
+const monthNames = [
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
 ];
 
 function slugify(value: string) {
@@ -286,6 +322,14 @@ function monthTagFromDayMonth(value?: string | null) {
   return monthAbbreviations[month - 1] || null;
 }
 
+function monthNameFromDayMonth(value?: string | null) {
+  if (!value || !isValidDayMonth(value)) return null;
+
+  const month = Number(value.split("/")[1]);
+
+  return monthNames[month - 1] || null;
+}
+
 function normalizedSearch(value?: string | null) {
   return `${value ?? ""}`
     .normalize("NFD")
@@ -362,7 +406,7 @@ function stopCardClick(event: React.MouseEvent<HTMLElement>) {
   event.stopPropagation();
 }
 
-function ClientAvatarDisplay({
+export function ClientAvatarDisplay({
   name,
   logoUrl,
   accentColor,
@@ -421,6 +465,14 @@ function InfoTag({ children }: { children: string }) {
   );
 }
 
+function PresentationMonthTag({ children }: { children: string }) {
+  return (
+    <span className="shrink-0 rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-semibold text-muted-foreground sm:px-3 sm:py-1 sm:text-xs">
+      {children}
+    </span>
+  );
+}
+
 function InlineSearchControl({
   isOpen,
   value,
@@ -437,50 +489,105 @@ function InlineSearchControl({
   onValueChange: (value: string) => void;
 }) {
   return (
-    <div
-      className={cn(
-        "relative flex h-10 items-center overflow-hidden rounded-lg border border-border bg-background text-muted-foreground transition-all duration-200 ease-out focus-within:border-neutral-400 dark:focus-within:border-white/35",
-        isOpen || value ? "w-[min(58vw,260px)]" : "w-10",
-      )}
-    >
+    <>
+      <div
+        className={cn(
+          "relative hidden h-10 items-center overflow-hidden rounded-lg border border-border bg-background text-muted-foreground transition-all duration-200 ease-out focus-within:border-neutral-400 dark:focus-within:border-white/35 md:flex",
+          isOpen || value ? "w-[min(58vw,260px)]" : "w-10",
+        )}
+      >
+        <button
+          type="button"
+          className="grid h-10 w-10 shrink-0 place-items-center transition-colors hover:text-foreground"
+          onClick={() => onOpenChange(true)}
+          aria-label={label}
+          title={label}
+        >
+          <Search className="h-4 w-4" />
+        </button>
+        {isOpen || value ? (
+          <>
+            <Input
+              value={value}
+              onChange={(event) => onValueChange(event.target.value)}
+              onBlur={() => {
+                if (!value.trim()) {
+                  onOpenChange(false);
+                }
+              }}
+              autoFocus
+              placeholder={placeholder}
+              className="h-10 min-w-0 flex-1 border-0 bg-transparent px-0 pr-8 text-sm text-foreground shadow-none focus-visible:ring-0"
+            />
+            <button
+              type="button"
+              className="absolute right-1.5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onValueChange("");
+                onOpenChange(false);
+              }}
+              aria-label="Fechar busca"
+              title="Fechar busca"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </>
+        ) : null}
+      </div>
+
       <button
         type="button"
-        className="grid h-10 w-10 shrink-0 place-items-center transition-colors hover:text-foreground"
+        className={cn(
+          "grid h-10 w-10 place-items-center rounded-lg border border-border bg-background text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground md:hidden",
+          (isOpen || value) && "border-foreground/30 text-foreground",
+        )}
         onClick={() => onOpenChange(true)}
         aria-label={label}
         title={label}
       >
         <Search className="h-4 w-4" />
       </button>
-      {isOpen || value ? (
-        <>
-          <Input
-            value={value}
-            onChange={(event) => onValueChange(event.target.value)}
-            onBlur={() => {
-              if (!value.trim()) {
-                onOpenChange(false);
-              }
-            }}
-            autoFocus
-            placeholder={placeholder}
-            className="h-10 min-w-0 flex-1 border-0 bg-transparent px-0 pr-8 text-sm text-foreground shadow-none focus-visible:ring-0"
-          />
-          {value ? (
-            <button
-              type="button"
-              className="absolute right-1.5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => onValueChange("")}
-              aria-label="Limpar busca"
-              title="Limpar busca"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          ) : null}
-        </>
+
+      {isOpen ? (
+        <div
+          className="fixed inset-0 z-[120] flex items-start justify-center bg-black/40 px-4 pt-20 md:hidden"
+          onClick={() => {
+            if (!value.trim()) {
+              onOpenChange(false);
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl border border-border bg-background p-3 shadow-none"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex h-12 items-center gap-2 rounded-lg border border-border bg-background px-3 text-foreground">
+              <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <Input
+                value={value}
+                onChange={(event) => onValueChange(event.target.value)}
+                autoFocus
+                placeholder={placeholder}
+                className="h-11 min-w-0 flex-1 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0"
+              />
+              <button
+                type="button"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
+                onClick={() => {
+                  onValueChange("");
+                  onOpenChange(false);
+                }}
+                aria-label="Fechar busca"
+                title="Fechar busca"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
-    </div>
+    </>
   );
 }
 
@@ -494,17 +601,17 @@ function DocumentThumbnail({
   accentColor: string;
 }) {
   return (
-    <div className="h-32 overflow-hidden rounded-lg border border-black/10 bg-white p-3 text-neutral-950 sm:h-48 sm:p-4">
-      <div className="mx-auto mb-4 h-1 w-12 rounded-full" style={{ backgroundColor: accentColor }} />
-      <h3 className="sora-heading line-clamp-2 text-center text-xs font-semibold uppercase leading-snug text-neutral-950 sm:text-sm">
+    <div className="h-28 overflow-hidden rounded-lg border border-black/10 bg-white p-2.5 text-neutral-950 sm:h-40 sm:p-3">
+      <div className="mx-auto mb-2.5 h-1 w-10 rounded-full sm:mb-3" style={{ backgroundColor: accentColor }} />
+      <h3 className="sora-heading line-clamp-2 text-center text-[10px] font-semibold uppercase leading-snug text-neutral-950 sm:text-xs">
         {title}
       </h3>
       {preview ? (
         <p
-          className="mt-3 text-[10px] leading-4 text-neutral-500 sm:mt-4 sm:text-xs sm:leading-5"
+          className="mt-2 text-[9px] leading-3.5 text-neutral-500 sm:mt-3 sm:text-[10px] sm:leading-4"
           style={{
             display: "-webkit-box",
-            WebkitLineClamp: 5,
+            WebkitLineClamp: 7,
             WebkitBoxOrient: "vertical",
             overflow: "hidden",
           }}
@@ -618,6 +725,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
   const [selectedPlanningIds, setSelectedPlanningIds] = useState<string[]>([]);
   const [selectedPresentationIds, setSelectedPresentationIds] = useState<string[]>([]);
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [libraryConfirmAction, setLibraryConfirmAction] = useState<LibraryConfirmAction>(null);
   const [clientProfileForm, setClientProfileForm] =
     useState<ClientProfileForm>(initialClientProfileForm);
   const [copyForm, setCopyForm] = useState<CopyPlanningForm>(initialCopyPlanningForm);
@@ -725,7 +833,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
     setError(null);
 
     const [clientResult, copyResult, visualResult] = await Promise.all([
-      supabase.from("clients").select("*").eq("id", clientId).maybeSingle(),
+      supabase.from("clients").select("*").eq("id", clientId).is("deleted_at", null).maybeSingle(),
       supabase
         .from("copy_plannings")
         .select("*")
@@ -757,6 +865,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
           clientResult.data?.secondary_color ||
           clientResult.data?.primary_color ||
           "#A3E635",
+        responsibleName: clientResult.data?.responsible_name || "",
       });
       setCopyPlannings(((copyResult.data ?? []) as CopyPlanningWithPreview[]).sort((a, b) => createdTime(b) - createdTime(a)));
       setVisualPresentations(visualData.sort((a, b) => createdTime(b) - createdTime(a)));
@@ -985,6 +1094,10 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
     : showArchivedPresentations
       ? `${scopedVisualPresentations.length} apresentacao${scopedVisualPresentations.length === 1 ? "" : "s"} arquivada${scopedVisualPresentations.length === 1 ? "" : "s"}`
       : `${scopedVisualPresentations.length} prancha${scopedVisualPresentations.length === 1 ? "" : "s"} criada${scopedVisualPresentations.length === 1 ? "" : "s"}`;
+  const activePresentationTypeTabIndex = Math.max(
+    0,
+    presentationTypeTabs.findIndex((tab) => tab.value === presentationType),
+  );
 
   function resetPlanningFilters() {
     setPlanningSearch("");
@@ -1034,6 +1147,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
 
     setBulkActionLoading(true);
     setError(null);
+    setProfileMessage(null);
 
     const { error: requestError } = await supabase
       .from("copy_plannings")
@@ -1045,6 +1159,15 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
     } else {
       cancelPlanningSelection();
       await loadClient();
+      setProfileMessage(
+        archived
+          ? ids.length === 1
+            ? "Planejamento arquivado."
+            : "Planejamentos arquivados."
+          : ids.length === 1
+            ? "Planejamento desarquivado."
+            : "Planejamentos desarquivados.",
+      );
     }
 
     setBulkActionLoading(false);
@@ -1055,6 +1178,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
 
     setBulkActionLoading(true);
     setError(null);
+    setProfileMessage(null);
 
     const { error: requestError } = await supabase
       .from("visual_presentations")
@@ -1066,6 +1190,15 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
     } else {
       cancelPresentationSelection();
       await loadClient();
+      setProfileMessage(
+        archived
+          ? ids.length === 1
+            ? "Apresentação arquivada."
+            : "Apresentações arquivadas."
+          : ids.length === 1
+            ? "Apresentação desarquivada."
+            : "Apresentações desarquivadas.",
+      );
     }
 
     setBulkActionLoading(false);
@@ -1074,12 +1207,9 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
   async function deletePlannings(ids: string[]) {
     if (!ids.length) return;
 
-    const confirmed = window.confirm(`Excluir ${ids.length} planejamento${ids.length === 1 ? "" : "s"}? Essa acao nao aparece mais na lista.`);
-
-    if (!confirmed) return;
-
     setBulkActionLoading(true);
     setError(null);
+    setProfileMessage(null);
 
     const { error: requestError } = await supabase
       .from("copy_plannings")
@@ -1091,6 +1221,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
     } else {
       cancelPlanningSelection();
       await loadClient();
+      setProfileMessage(ids.length === 1 ? "Planejamento excluído." : "Planejamentos excluídos.");
     }
 
     setBulkActionLoading(false);
@@ -1099,12 +1230,9 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
   async function deletePresentations(ids: string[]) {
     if (!ids.length) return;
 
-    const confirmed = window.confirm(`Excluir ${ids.length} apresentacao${ids.length === 1 ? "" : "s"}? Essa acao nao aparece mais na lista.`);
-
-    if (!confirmed) return;
-
     setBulkActionLoading(true);
     setError(null);
+    setProfileMessage(null);
 
     const { error: requestError } = await supabase
       .from("visual_presentations")
@@ -1116,10 +1244,46 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
     } else {
       cancelPresentationSelection();
       await loadClient();
+      setProfileMessage(ids.length === 1 ? "Apresentação excluída." : "Apresentações excluídas.");
     }
 
     setBulkActionLoading(false);
   }
+
+  async function confirmLibraryAction() {
+    if (!libraryConfirmAction) return;
+
+    const action = libraryConfirmAction;
+
+    if (action.kind === "archive-planning") await updatePlanningArchive(action.ids, true);
+    if (action.kind === "unarchive-planning") await updatePlanningArchive(action.ids, false);
+    if (action.kind === "delete-planning") await deletePlannings(action.ids);
+    if (action.kind === "archive-presentation") await updatePresentationArchive(action.ids, true);
+    if (action.kind === "unarchive-presentation") await updatePresentationArchive(action.ids, false);
+    if (action.kind === "delete-presentation") await deletePresentations(action.ids);
+
+    setLibraryConfirmAction(null);
+  }
+
+  const libraryConfirmConfig = libraryConfirmAction
+    ? {
+        title: libraryConfirmAction.kind.includes("delete")
+          ? "Excluir item"
+          : libraryConfirmAction.kind.includes("unarchive")
+            ? "Desarquivar item"
+            : "Arquivar item",
+        message: libraryConfirmAction.kind.includes("delete")
+          ? "Você tem certeza que quer excluir este item? Essa ação não poderá ser desfeita."
+          : libraryConfirmAction.kind.includes("unarchive")
+            ? "Você tem certeza que quer desarquivar este item? Ele voltará para a lista principal."
+            : "Você tem certeza que quer arquivar este item? Ele sairá da lista principal e ficará disponível em Arquivados.",
+        confirmLabel: libraryConfirmAction.kind.includes("delete")
+          ? "Excluir"
+          : libraryConfirmAction.kind.includes("unarchive")
+            ? "Desarquivar"
+            : "Arquivar",
+      }
+    : null;
 
   function openCreationModal(mode: Exclude<CreationMode, null>) {
     setError(null);
@@ -1143,6 +1307,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
       logoUrl: client.logo_url,
       primaryColor: client.primary_color || "#A3E635",
       secondaryColor: client.secondary_color || client.primary_color || "#A3E635",
+      responsibleName: client.responsible_name || "",
     });
     setProfileError(null);
     setProfileMessage(null);
@@ -1316,6 +1481,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
         clientProfileForm.secondaryColor ||
         clientProfileForm.primaryColor ||
         "#A3E635",
+      responsible_name: clientProfileForm.responsibleName || null,
       updated_at: new Date().toISOString(),
     };
 
@@ -1344,6 +1510,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
           updatedClient.secondary_color ||
           updatedClient.primary_color ||
           "#A3E635",
+        responsibleName: updatedClient.responsible_name || "",
       });
       setIsProfileModalOpen(false);
       setProfileMessage("Perfil atualizado.");
@@ -1428,7 +1595,8 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
 
   return (
     <section className="space-y-6 md:space-y-8">
-      <div className="relative flex flex-col gap-4 rounded-2xl border border-border bg-background p-4 pr-24 md:flex-row md:items-center md:justify-between md:p-5 md:pr-28">
+      <div className="relative flex flex-col gap-4 overflow-hidden rounded-2xl border border-border bg-background p-4 pr-24 md:flex-row md:items-center md:justify-between md:p-5 md:pr-28">
+        <span className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: accentColor }} />
         <div className="absolute right-3 top-3 flex items-center gap-1 md:right-4 md:top-4">
           <Button asChild variant="ghostSecondary" size="icon" className="h-9 w-9 rounded-full" title="Voltar para clientes">
             <Link href="/admin/clientes" aria-label="Voltar para clientes">
@@ -1465,6 +1633,9 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
             </div>
             <p className="mt-1 truncate text-xs text-muted-foreground md:mt-2 md:text-sm">
               /{client.slug} - criado em {formatDateBR(client.created_at)}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Responsável: <span className="text-foreground">{client.responsible_name || "Sem responsável"}</span>
             </p>
           </div>
         </div>
@@ -1515,15 +1686,15 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
         </TabsList>
 
         <TabsContent value="planejamentos" className="space-y-5">
-          <div className="flex items-start justify-between gap-3">
-            <div className="shrink-0">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
               <h2 className="sora-heading text-xl font-medium text-foreground">Planejamentos</h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 {planningCounterText}
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
               <LibraryCreateButton
                 label="Criar novo planejamento"
                 onClick={() => openCreationModal("copy")}
@@ -1630,7 +1801,9 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                     type="button"
                     variant="ghostSecondary"
                     size="sm"
-                    onClick={() => updatePlanningArchive(selectedPlanningIds, false)}
+                    onClick={() =>
+                      setLibraryConfirmAction({ kind: "unarchive-planning", ids: selectedPlanningIds })
+                    }
                     disabled={bulkActionLoading}
                   >
                     <RotateCcw className="h-3.5 w-3.5" />
@@ -1641,7 +1814,9 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                     type="button"
                     variant="ghostSecondary"
                     size="sm"
-                    onClick={() => updatePlanningArchive(selectedPlanningIds, true)}
+                    onClick={() =>
+                      setLibraryConfirmAction({ kind: "archive-planning", ids: selectedPlanningIds })
+                    }
                     disabled={bulkActionLoading}
                   >
                     <Archive className="h-3.5 w-3.5" />
@@ -1654,9 +1829,9 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                   type="button"
                   variant="ghostSecondary"
                   size="sm"
-                  onClick={() => deletePlannings(selectedPlanningIds)}
+                  onClick={() => setLibraryConfirmAction({ kind: "delete-planning", ids: selectedPlanningIds })}
                   disabled={bulkActionLoading}
-                  className="text-rose-500 hover:text-rose-500"
+                  className="text-muted-foreground hover:bg-rose-500/10 hover:text-rose-500"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Excluir
@@ -1702,7 +1877,10 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                     }}
                     className={cn(
                       "group relative cursor-pointer rounded-2xl border bg-background p-2 transition hover:-translate-y-0.5 hover:border-foreground/25 sm:p-3",
-                      isSelected ? "border-[var(--zacx-brand)]" : "border-border",
+                      isSelected
+                        ? "border-blue-400 bg-blue-500/[0.06] dark:border-blue-400/60 dark:bg-blue-400/10"
+                        : "border-border",
+                      isArchived && !isSelected && "border-dashed opacity-70",
                     )}
                   >
                     {planningSelectionMode ? (
@@ -1713,7 +1891,11 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                         {isSelected ? <CheckSquare2 className="h-4 w-4" /> : <Square className="h-4 w-4" />}
                       </span>
                     ) : null}
-                    <DocumentThumbnail title={planning.title} preview={previewText} accentColor={accentColor} />
+                    <DocumentThumbnail
+                      title={planning.title}
+                      preview={previewText}
+                      accentColor={isArchived ? "#D4D4D8" : accentColor}
+                    />
                     <div className="space-y-2 px-1 pb-1 pt-3 sm:space-y-3 sm:pt-4">
                       <div className="flex items-start justify-between gap-2">
                         <h3 className="sora-heading line-clamp-2 text-sm font-medium leading-snug text-foreground sm:text-base">
@@ -1725,56 +1907,73 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                         <p>{planning.period_label || "Periodo nao definido"}</p>
                         <p className="hidden sm:block">Criado em {formatDateBR(planning.created_at)}</p>
                       </div>
-                      <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1">
+                      <div className="flex flex-wrap items-center justify-between gap-1 pt-1 sm:gap-1.5">
                         <div className="flex min-w-0 items-center gap-1.5">
                           <Button
                             type="button"
-                            variant="ghostSecondary"
-                            size="sm"
-                            className="bg-transparent px-2 hover:bg-neutral-900/5 dark:hover:bg-white/[0.08]"
-                            onClick={(event) => {
-                              stopCardClick(event);
-                              copyLink(publicPath);
-                            }}
-                          >
-                            <Clipboard className="h-3.5 w-3.5" />
-                            <span className="hidden sm:inline">
-                              {copiedLink === publicPath ? "Copiado" : "Link"}
-                            </span>
-                          </Button>
-                          <Button
-                            asChild
-                            variant="ghostSecondary"
-                            size="sm"
-                            className="bg-transparent px-2 hover:bg-neutral-900/5 dark:hover:bg-white/[0.08]"
-                          >
-                            <Link
-                              href={publicPath}
-                              target="_blank"
-                              rel="noreferrer"
-                              onClick={stopCardClick}
-                            >
-                              <ExternalLink className="h-3.5 w-3.5" />
-                              <span className="hidden sm:inline">Publico</span>
-                            </Link>
-                          </Button>
+	                            variant="ghostSecondary"
+	                            size="icon"
+	                            className="h-7 w-7 bg-transparent hover:bg-neutral-900/5 dark:hover:bg-white/[0.08] sm:h-8 sm:w-8"
+	                            onClick={(event) => {
+	                              stopCardClick(event);
+	                              copyLink(publicPath);
+	                            }}
+	                            aria-label="Copiar link"
+	                            title={copiedLink === publicPath ? "Link copiado" : "Copiar link"}
+	                          >
+	                            <Clipboard className="h-3.5 w-3.5" />
+	                          </Button>
+	                          <Button
+	                            asChild
+	                            variant="ghostSecondary"
+	                            size="icon"
+	                            className="h-7 w-7 bg-transparent hover:bg-neutral-900/5 dark:hover:bg-white/[0.08] sm:h-8 sm:w-8"
+	                          >
+	                            <Link
+	                              href={publicPath}
+	                              target="_blank"
+	                              rel="noreferrer"
+	                              onClick={stopCardClick}
+	                              aria-label="Abrir público"
+	                              title="Abrir público"
+	                            >
+	                              <ExternalLink className="h-3.5 w-3.5" />
+	                            </Link>
+	                          </Button>
                         </div>
-                        <div className="flex shrink-0 items-center gap-1.5">
+                        <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
                           <Button
                             type="button"
                             variant="ghostSecondary"
                             size="icon"
-                            className="h-8 w-8 bg-transparent hover:bg-neutral-900/5 dark:hover:bg-white/[0.08]"
+                            className="h-7 w-7 bg-transparent hover:bg-neutral-900/5 dark:hover:bg-white/[0.08] sm:h-8 sm:w-8"
                             onClick={(event) => {
                               stopCardClick(event);
-                              updatePlanningArchive([planning.id], !isArchived);
+                              setLibraryConfirmAction({
+                                kind: isArchived ? "unarchive-planning" : "archive-planning",
+                                ids: [planning.id],
+                              });
                             }}
                             aria-label={isArchived ? "Desarquivar planejamento" : "Arquivar planejamento"}
                             title={isArchived ? "Desarquivar" : "Arquivar"}
                           >
-                            {isArchived ? <RotateCcw className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
-                          </Button>
-                          {planningMonthTag ? <InfoTag>{planningMonthTag}</InfoTag> : null}
+	                            {isArchived ? <RotateCcw className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
+	                          </Button>
+	                          <Button
+	                            type="button"
+	                            variant="ghostSecondary"
+	                            size="icon"
+	                            className="h-7 w-7 bg-transparent text-muted-foreground hover:bg-rose-500/10 hover:text-rose-500 sm:h-8 sm:w-8"
+	                            onClick={(event) => {
+	                              stopCardClick(event);
+	                              setLibraryConfirmAction({ kind: "delete-planning", ids: [planning.id] });
+	                            }}
+	                            aria-label="Excluir planejamento"
+	                            title="Excluir"
+	                          >
+	                            <Trash2 className="h-3.5 w-3.5" />
+	                          </Button>
+	                          {planningMonthTag ? <InfoTag>{planningMonthTag}</InfoTag> : null}
                         </div>
                       </div>
                     </div>
@@ -1806,15 +2005,46 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
         </TabsContent>
 
         <TabsContent value="apresentacoes" className="space-y-5">
-          <div className="flex items-start justify-between gap-3">
-            <div className="shrink-0">
-              <h2 className="sora-heading text-xl font-medium text-foreground">Apresentacoes</h2>
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="sora-heading text-xl font-medium text-foreground">Apresentações</h2>
+                <div className="flex w-full justify-center sm:w-auto sm:justify-start">
+                  <div className="relative grid h-9 w-full max-w-[360px] grid-cols-4 rounded-lg border border-border bg-background p-1">
+                    <span
+                      className="absolute bottom-1 left-1 top-1 rounded-md bg-blue-500/[0.09] transition-transform duration-200 ease-out dark:bg-[var(--zacx-brand)]/15"
+                      style={{
+                        width: "calc((100% - 0.5rem) / 4)",
+                        transform: `translateX(${activePresentationTypeTabIndex * 100}%)`,
+                      }}
+                      aria-hidden="true"
+                    />
+                  {presentationTypeTabs.map((tab) => {
+                    const isActive = presentationType === tab.value;
+
+                    return (
+                      <button
+                        key={tab.value}
+                        type="button"
+                        onClick={() => setPresentationType(tab.value)}
+                        className={cn(
+                          "relative z-10 h-7 rounded-md px-2 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground sm:text-[11px]",
+                          isActive && "text-foreground dark:text-foreground",
+                        )}
+                      >
+                        {tab.label}
+                      </button>
+                    );
+                  })}
+                  </div>
+                </div>
+              </div>
               <p className="mt-1 text-sm text-muted-foreground">
                 {presentationCounterText}
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 md:justify-end">
               <LibraryCreateButton
                 label="Criar nova apresentacao"
                 onClick={() => openCreationModal("visual")}
@@ -1882,18 +2112,6 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                         ))}
                       </select>
                       <select
-                        value={presentationType}
-                        onChange={(event) => setPresentationType(event.target.value as PresentationTypeFilter)}
-                        className={cn("flex h-10 rounded-md border px-3 py-2 text-sm", compactControlClass)}
-                      >
-                        <option value="all">Todos os tipos</option>
-                        {visualPresentationTypeOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                      <select
                         value={presentationSort}
                         onChange={(event) => setPresentationSort(event.target.value as PresentationSort)}
                         className={cn("flex h-10 rounded-md border px-3 py-2 text-sm", compactControlClass)}
@@ -1933,7 +2151,9 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                     type="button"
                     variant="ghostSecondary"
                     size="sm"
-                    onClick={() => updatePresentationArchive(selectedPresentationIds, false)}
+                    onClick={() =>
+                      setLibraryConfirmAction({ kind: "unarchive-presentation", ids: selectedPresentationIds })
+                    }
                     disabled={bulkActionLoading}
                   >
                     <RotateCcw className="h-3.5 w-3.5" />
@@ -1944,7 +2164,9 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                     type="button"
                     variant="ghostSecondary"
                     size="sm"
-                    onClick={() => updatePresentationArchive(selectedPresentationIds, true)}
+                    onClick={() =>
+                      setLibraryConfirmAction({ kind: "archive-presentation", ids: selectedPresentationIds })
+                    }
                     disabled={bulkActionLoading}
                   >
                     <Archive className="h-3.5 w-3.5" />
@@ -1957,9 +2179,11 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                   type="button"
                   variant="ghostSecondary"
                   size="sm"
-                  onClick={() => deletePresentations(selectedPresentationIds)}
+                  onClick={() =>
+                    setLibraryConfirmAction({ kind: "delete-presentation", ids: selectedPresentationIds })
+                  }
                   disabled={bulkActionLoading}
-                  className="text-rose-500 hover:text-rose-500"
+                  className="text-muted-foreground hover:bg-rose-500/10 hover:text-rose-500"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Excluir
@@ -1975,11 +2199,11 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
             <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-2 2xl:grid-cols-3">
               {filteredVisualPresentations.map((presentation) => {
                 const publicPath = `/a/${presentation.public_slug}`;
-                const detailColor = accentColor;
-                const presentationMonthTag = monthTagFromDayMonth(presentation.start_display_date);
+                const presentationMonthName = monthNameFromDayMonth(presentation.start_display_date);
                 const presentationTypeTag = getPresentationTypeLabel(visualPresentationTypeValue(presentation)).toUpperCase();
                 const isSelected = selectedPresentationIds.includes(presentation.id);
                 const isArchived = Boolean(presentation.archived_at);
+                const detailColor = isArchived ? "#D4D4D8" : accentColor;
 
                 return (
                   <article
@@ -2003,7 +2227,10 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                     }}
                     className={cn(
                       "group relative cursor-pointer rounded-2xl border bg-background p-2 transition hover:-translate-y-0.5 hover:border-foreground/25 sm:p-4",
-                      isSelected ? "border-[var(--zacx-brand)]" : "border-border",
+                      isSelected
+                        ? "border-blue-400 bg-blue-500/[0.06] dark:border-blue-400/60 dark:bg-blue-400/10"
+                        : "border-border",
+                      isArchived && !isSelected && "border-dashed opacity-70",
                     )}
                   >
                     {presentationSelectionMode ? (
@@ -2020,67 +2247,86 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                       detailColor={detailColor}
                     />
                     <div className="space-y-2 px-1 pb-1 pt-3 sm:space-y-3 sm:pt-4">
-                      <div className="flex items-start justify-between gap-2">
-                        <h3 className="sora-heading line-clamp-2 text-sm font-medium leading-snug text-foreground sm:text-base">
-                          {presentation.title}
-                        </h3>
-                        {isArchived ? <InfoTag>Arquivada</InfoTag> : null}
-                      </div>
+	                      <div className="flex items-start justify-between gap-2">
+	                        <div className="flex min-w-0 flex-1 flex-wrap items-start gap-1.5 sm:gap-2">
+	                          <h3 className="sora-heading line-clamp-2 text-sm font-medium leading-snug text-foreground sm:text-base">
+	                            {presentation.title}
+	                          </h3>
+	                          {presentationMonthName ? <PresentationMonthTag>{presentationMonthName}</PresentationMonthTag> : null}
+	                        </div>
+	                        {isArchived ? <InfoTag>Arquivada</InfoTag> : null}
+	                      </div>
                       <div className="space-y-1 text-[11px] text-muted-foreground sm:text-xs">
                         <p>{presentation.period_label || "Periodo nao definido"}</p>
                         <p className="hidden sm:block">Criada em {formatDateBR(presentation.created_at)}</p>
                       </div>
-                      <div className="flex flex-wrap items-center gap-2 pt-1 sm:flex-nowrap">
-                        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                      <div className="flex flex-wrap items-center gap-1 pt-1 sm:flex-nowrap sm:gap-2">
+                        <div className="flex min-w-0 flex-wrap items-center gap-1 sm:gap-1.5">
                           <Button
                             type="button"
-                            variant="ghostSecondary"
-                            size="sm"
-                            className="bg-transparent px-2 hover:bg-neutral-900/5 dark:hover:bg-white/[0.08]"
-                            onClick={(event) => {
-                              stopCardClick(event);
-                              copyLink(publicPath);
-                            }}
-                          >
-                            <Clipboard className="h-3.5 w-3.5" />
-                            <span className="hidden sm:inline">
-                              {copiedLink === publicPath ? "Copiado" : "Link"}
-                            </span>
-                          </Button>
-                          <Button
-                            asChild
-                            variant="ghostSecondary"
-                            size="sm"
-                            className="bg-transparent px-2 hover:bg-neutral-900/5 dark:hover:bg-white/[0.08]"
-                          >
-                            <Link
-                              href={publicPath}
-                              target="_blank"
-                              rel="noreferrer"
-                              onClick={stopCardClick}
-                            >
-                              <ExternalLink className="h-3.5 w-3.5" />
-                              <span className="hidden sm:inline">Publico</span>
-                            </Link>
-                          </Button>
+	                            variant="ghostSecondary"
+	                            size="icon"
+	                            className="h-7 w-7 bg-transparent hover:bg-neutral-900/5 dark:hover:bg-white/[0.08] sm:h-8 sm:w-8"
+	                            onClick={(event) => {
+	                              stopCardClick(event);
+	                              copyLink(publicPath);
+	                            }}
+	                            aria-label="Copiar link"
+	                            title={copiedLink === publicPath ? "Link copiado" : "Copiar link"}
+	                          >
+	                            <Clipboard className="h-3.5 w-3.5" />
+	                          </Button>
+	                          <Button
+	                            asChild
+	                            variant="ghostSecondary"
+	                            size="icon"
+	                            className="h-7 w-7 bg-transparent hover:bg-neutral-900/5 dark:hover:bg-white/[0.08] sm:h-8 sm:w-8"
+	                          >
+	                            <Link
+	                              href={publicPath}
+	                              target="_blank"
+	                              rel="noreferrer"
+	                              onClick={stopCardClick}
+	                              aria-label="Abrir público"
+	                              title="Abrir público"
+	                            >
+	                              <ExternalLink className="h-3.5 w-3.5" />
+	                            </Link>
+	                          </Button>
                         </div>
-                        <div className="ml-auto flex shrink-0 items-center gap-2 pl-3">
+                        <div className="ml-auto flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-1 pl-1 sm:gap-1.5 sm:pl-3">
                           <Button
                             type="button"
                             variant="ghostSecondary"
                             size="icon"
-                            className="h-8 w-8 bg-transparent hover:bg-neutral-900/5 dark:hover:bg-white/[0.08]"
+                            className="h-7 w-7 bg-transparent hover:bg-neutral-900/5 dark:hover:bg-white/[0.08] sm:h-8 sm:w-8"
                             onClick={(event) => {
                               stopCardClick(event);
-                              updatePresentationArchive([presentation.id], !isArchived);
+                              setLibraryConfirmAction({
+                                kind: isArchived ? "unarchive-presentation" : "archive-presentation",
+                                ids: [presentation.id],
+                              });
                             }}
                             aria-label={isArchived ? "Desarquivar apresentação" : "Arquivar apresentação"}
                             title={isArchived ? "Desarquivar" : "Arquivar"}
                           >
-                            {isArchived ? <RotateCcw className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
-                          </Button>
-                          {presentationMonthTag ? <InfoTag>{presentationMonthTag}</InfoTag> : null}
-                          <InfoTag>{presentationTypeTag}</InfoTag>
+	                            {isArchived ? <RotateCcw className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
+	                          </Button>
+	                          <Button
+	                            type="button"
+	                            variant="ghostSecondary"
+	                            size="icon"
+	                            className="h-7 w-7 bg-transparent text-muted-foreground hover:bg-rose-500/10 hover:text-rose-500 sm:h-8 sm:w-8"
+	                            onClick={(event) => {
+	                              stopCardClick(event);
+	                              setLibraryConfirmAction({ kind: "delete-presentation", ids: [presentation.id] });
+	                            }}
+	                            aria-label="Excluir apresentação"
+	                            title="Excluir"
+	                          >
+	                            <Trash2 className="h-3.5 w-3.5" />
+	                          </Button>
+	                          <InfoTag>{presentationTypeTag}</InfoTag>
                         </div>
                       </div>
                     </div>
@@ -2110,9 +2356,48 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
             />
           )}
         </TabsContent>
-      </Tabs>
+	      </Tabs>
 
-      {isPlanningFilterSheetOpen ? (
+	      {libraryConfirmConfig ? (
+	        <div
+	          className="fixed inset-0 z-[120] grid place-items-center bg-black/40 px-4"
+	          onClick={() => {
+	            if (!bulkActionLoading) setLibraryConfirmAction(null);
+	          }}
+	        >
+	          <div
+	            className="w-full max-w-md rounded-2xl border border-border bg-background p-5 shadow-none"
+	            onClick={(event) => event.stopPropagation()}
+	          >
+	            <h2 className="sora-heading text-xl font-medium text-foreground">{libraryConfirmConfig.title}</h2>
+	            <p className="mt-3 text-sm leading-6 text-muted-foreground">{libraryConfirmConfig.message}</p>
+	            <div className="mt-6 flex justify-end gap-3">
+	              <Button
+	                type="button"
+	                variant="ghostSecondary"
+	                onClick={() => setLibraryConfirmAction(null)}
+	                disabled={bulkActionLoading}
+	              >
+	                Cancelar
+	              </Button>
+	              <Button
+	                type="button"
+	                onClick={confirmLibraryAction}
+	                disabled={bulkActionLoading}
+	                className={
+	                  libraryConfirmAction?.kind.includes("delete")
+	                    ? "bg-rose-600 text-white hover:bg-rose-600/90"
+	                    : "bg-[var(--zacx-brand)] text-white hover:opacity-90 dark:text-black"
+	                }
+	              >
+	                {bulkActionLoading ? "Processando..." : libraryConfirmConfig.confirmLabel}
+	              </Button>
+	            </div>
+	          </div>
+	        </div>
+	      ) : null}
+
+	      {isPlanningFilterSheetOpen ? (
         <div
           className="fixed inset-0 z-[110] grid place-items-end bg-black/40 p-3 dark:bg-black/60 md:hidden"
           onClick={() => setIsPlanningFilterSheetOpen(false)}
@@ -2196,18 +2481,6 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                 ))}
               </select>
               <select
-                value={presentationType}
-                onChange={(event) => setPresentationType(event.target.value as PresentationTypeFilter)}
-                className={cn("flex h-11 rounded-md border px-3 py-2 text-sm", compactControlClass)}
-              >
-                <option value="all">Todos os tipos</option>
-                {visualPresentationTypeOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <select
                 value={presentationSort}
                 onChange={(event) => setPresentationSort(event.target.value as PresentationSort)}
                 className={cn("flex h-11 rounded-md border px-3 py-2 text-sm", compactControlClass)}
@@ -2286,6 +2559,28 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                   }
                   placeholder="Nome do cliente"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="clientProfileResponsible">Responsável por esta empresa</Label>
+                <select
+                  id="clientProfileResponsible"
+                  value={clientProfileForm.responsibleName}
+                  onChange={(event) =>
+                    setClientProfileForm((current) => ({
+                      ...current,
+                      responsibleName: event.target.value,
+                    }))
+                  }
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground transition-colors focus-visible:outline-none focus-visible:ring-0 focus-visible:border-neutral-400 dark:focus-visible:border-white/35"
+                >
+                  <option value="">Sem responsável</option>
+                  {responsibleOptions.map((responsible) => (
+                    <option key={responsible} value={responsible}>
+                      {responsible}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="rounded-xl border border-border bg-background p-4">

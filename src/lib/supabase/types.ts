@@ -19,6 +19,8 @@ export type PresentationType =
   | "quinzenal"
   | "mensal";
 
+export type ResponsibleName = "Rafael" | "Matheus";
+
 export type Client = {
   id: string;
   name: string;
@@ -26,6 +28,9 @@ export type Client = {
   logo_url: string | null;
   primary_color: string | null;
   secondary_color?: string | null;
+  responsible_name?: ResponsibleName | string | null;
+  archived_at?: string | null;
+  deleted_at?: string | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -189,6 +194,9 @@ export type Database = {
           logo_url?: string | null;
           primary_color?: string | null;
           secondary_color?: string | null;
+          responsible_name?: ResponsibleName | string | null;
+          archived_at?: string | null;
+          deleted_at?: string | null;
           created_at?: string | null;
           updated_at?: string | null;
         },

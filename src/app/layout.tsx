@@ -8,6 +8,7 @@ import { ThemeProvider } from "@/components/theme/theme-provider";
 const poppins = Poppins({
   subsets: ["latin"],
   weight: ["300", "400", "500", "600"],
+  variable: "--font-poppins",
 });
 
 const sora = Sora({
@@ -64,7 +65,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR" className="light" suppressHydrationWarning>
-      <body className={`${poppins.className} ${sora.variable}`}>
+      <body className={`${poppins.variable} ${sora.variable}`}>
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>

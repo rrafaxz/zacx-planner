@@ -82,7 +82,7 @@ const titleMatchers: Record<CopySectionKey, RegExp> = {
   videos: /^planejamento\s+dos\s+v[ií]deos$/i,
 };
 
-const fontOptions = ["Poppins", "Montserrat", "Sora", "Arial", "Inter"];
+const fontOptions = ["Poppins", "Sora"];
 const sizeOptions = ["7px", "8px", "9px", "10px", "11px", "12px", "14px", "16px", "18px", "20px", "24px", "30px", "36px", "48px", "60px", "72px", "96px"];
 const weightOptions = [
   { label: "Light", value: "300" },
@@ -1329,7 +1329,7 @@ export function CopyDocument({
 
         .copy-document-fixed-header h2 {
           margin: 0 0 4px !important;
-          font-family: var(--font-sora), Sora, Poppins, Arial, sans-serif;
+          font-family: var(--font-sora), Sora, var(--font-poppins), Poppins, sans-serif;
           font-size: clamp(22px, 3vw, 30px);
           line-height: 1.12;
           font-weight: 700;
@@ -1338,7 +1338,7 @@ export function CopyDocument({
 
         .copy-document-fixed-header p {
           margin: 0 !important;
-          font-family: var(--font-sora), Sora, Poppins, Arial, sans-serif;
+          font-family: var(--font-sora), Sora, var(--font-poppins), Poppins, sans-serif;
           font-size: clamp(13px, 1.4vw, 16px);
           line-height: 1.35;
           font-weight: 500;
@@ -1390,7 +1390,7 @@ export function CopyDocument({
         .tiptap-copy-editor .ProseMirror h1,
         .tiptap-copy-editor .ProseMirror h2,
         .tiptap-copy-editor .ProseMirror h3 {
-          font-family: var(--font-sora), Sora, Poppins, Arial, sans-serif;
+          font-family: var(--font-sora), Sora, var(--font-poppins), Poppins, sans-serif;
           letter-spacing: 0;
         }
 

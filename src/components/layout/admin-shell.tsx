@@ -102,8 +102,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               className="relative z-[121] h-full w-[min(82vw,300px)] border-r border-border bg-background p-4"
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="flex items-center justify-between gap-3">
-                <ZacxLogo className="h-5 w-auto max-w-[112px] text-[var(--zacx-brand)]" />
+              <div className="grid grid-cols-[36px_1fr_36px] items-center gap-3">
+                <span aria-hidden="true" />
+                <ZacxLogo className="mx-auto h-5 w-auto max-w-[112px] text-[var(--zacx-brand)]" />
                 <button
                   type="button"
                   onClick={() => setIsMobileMenuOpen(false)}
@@ -183,7 +184,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         >
           <Link
             href="/admin"
-            className={cn("flex min-w-0 items-center", isCollapsed ? "justify-center" : "max-w-[145px]")}
+          className={cn("flex min-w-0 items-center", isCollapsed ? "justify-center" : "flex-1 justify-center pl-9")}
           >
             {isCollapsed ? (
               <ZacxMark className="h-8 w-8 text-[var(--zacx-brand)] transition-colors" />

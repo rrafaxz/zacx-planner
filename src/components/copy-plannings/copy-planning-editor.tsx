@@ -49,6 +49,7 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
   const [saving, setSaving] = useState(false);
   const [savingTitle, setSavingTitle] = useState(false);
   const [archiving, setArchiving] = useState(false);
+  const [confirmArchiveOpen, setConfirmArchiveOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -209,10 +210,6 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
   async function archivePlanning() {
     if (!planning) return;
 
-    const confirmed = window.confirm("Arquivar este planejamento?");
-
-    if (!confirmed) return;
-
     setArchiving(true);
     setError(null);
     setNotice(null);
@@ -348,7 +345,7 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
                   variant="ghostSecondary"
                   size="sm"
                   className="h-8 px-2.5 text-xs"
-                  onClick={archivePlanning}
+                  onClick={() => setConfirmArchiveOpen(true)}
                   disabled={archiving}
                   aria-label="Arquivar"
                   title="Arquivar"
@@ -427,8 +424,47 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
             }
           />
         </TabsContent>
-      </Tabs>
-      <style jsx global>{`
+	      </Tabs>
+	      {confirmArchiveOpen ? (
+	        <div
+	          className="fixed inset-0 z-[120] grid place-items-center bg-black/40 px-4"
+	          onClick={() => {
+	            if (!archiving) setConfirmArchiveOpen(false);
+	          }}
+	        >
+	          <div
+	            className="w-full max-w-md rounded-2xl border border-border bg-background p-5 shadow-none"
+	            onClick={(event) => event.stopPropagation()}
+	          >
+	            <h2 className="sora-heading text-xl font-medium text-foreground">Arquivar planejamento</h2>
+	            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+	              Você tem certeza que quer arquivar este item? Ele sairá da lista principal e ficará disponível em Arquivados.
+	            </p>
+	            <div className="mt-6 flex justify-end gap-3">
+	              <Button
+	                type="button"
+	                variant="ghostSecondary"
+	                onClick={() => setConfirmArchiveOpen(false)}
+	                disabled={archiving}
+	              >
+	                Cancelar
+	              </Button>
+	              <Button
+	                type="button"
+	                onClick={async () => {
+	                  await archivePlanning();
+	                  setConfirmArchiveOpen(false);
+	                }}
+	                disabled={archiving}
+	                className="bg-[var(--zacx-brand)] text-white hover:opacity-90 dark:text-black"
+	              >
+	                {archiving ? "Arquivando..." : "Arquivar"}
+	              </Button>
+	            </div>
+	          </div>
+	        </div>
+	      ) : null}
+	      <style jsx global>{`
         .planning-editor-shell {
           width: 100vw;
           margin-left: calc(50% - 50vw);

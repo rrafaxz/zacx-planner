@@ -12,6 +12,7 @@ import {
   ImageIcon,
   ImagePlus,
   Info,
+  Pencil,
   Plus,
   Square,
   Trash2,
@@ -35,9 +36,11 @@ import {
 } from "@/components/visual-presentations/story-image-notes";
 import {
   buildVisualPresentationWeeks,
+  buildVisualPresentationWeekNotes,
   dateLabelForWeekOffset,
   filterVisualItemsForWeek,
   isDayMonthInVisualWeek,
+  visualPresentationWeekNotesFromText,
   type VisualPresentationWeek,
 } from "@/components/visual-presentations/visual-presentation-weeks";
 import { useTheme } from "@/components/theme/theme-provider";
@@ -97,6 +100,16 @@ type VisualItemDragState = DragIndexState & {
 };
 
 type EditorMode = "visual" | "edit";
+type WeekEditForm = {
+  title: string;
+  startDate: string;
+  endDate: string;
+};
+type VisualConfirmAction =
+  | { kind: "delete-item"; item: VisualItemWithImages }
+  | { kind: "delete-selected" }
+  | { kind: "archive-presentation" }
+  | null;
 
 const weekdays = ["SEG", "TER", "QUA", "QUI", "SEX", "SÁB", "DOM"];
 const visualPresentationsBucket = "visual-presentations";
@@ -227,6 +240,36 @@ function normalizeWeekdayValue(value?: string | null) {
 
 function dateFromDisplayDate(value?: string | null) {
   return formatDateInput(value || "");
+}
+
+function parseDayMonthLabel(value?: string | null, year = 2026) {
+  const formattedValue = formatDateInput(value || "");
+
+  if (!formattedValue || getDayMonthInputError(formattedValue)) return null;
+
+  const [dayText, monthText] = formattedValue.split("/");
+  const date = new Date(year, Number(monthText) - 1, Number(dayText), 12, 0, 0, 0);
+
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatDayMonthLabel(date: Date) {
+  return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function addDaysToDate(date: Date, days: number) {
+  const nextDate = new Date(date);
+
+  nextDate.setDate(nextDate.getDate() + days);
+  nextDate.setHours(12, 0, 0, 0);
+  return nextDate;
+}
+
+function presentationTypeFromWeekCount(weekCount: number) {
+  if (weekCount <= 1) return "semanal";
+  if (weekCount === 2) return "quinzenal";
+
+  return "mensal";
 }
 
 function reorderCollection<T>(collection: T[], fromIndex: number, toIndex: number) {
@@ -363,11 +406,16 @@ function AddFormatCard({
           "mx-auto grid w-full max-w-[118px] place-items-center rounded-xl border border-dashed border-border bg-background transition-colors group-hover:border-foreground/40",
           "relative",
           shapeClass,
-          format === "carousel" &&
-            "before:absolute before:inset-x-5 before:top-4 before:h-1 before:rounded-full before:bg-foreground/15",
         )}
       >
-        <div className="grid h-11 w-11 place-items-center rounded-full border border-border bg-background text-foreground transition-colors group-hover:border-foreground/40">
+        {format === "carousel" ? (
+          <div className="pointer-events-none absolute inset-0 overflow-hidden">
+            <span className="absolute left-1/2 top-1/2 h-[58%] w-[54%] -translate-x-[96%] -translate-y-1/2 rounded-lg border border-dashed border-foreground/20 bg-background" />
+            <span className="absolute left-1/2 top-1/2 h-[68%] w-[58%] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-dashed border-foreground/35 bg-background" />
+            <span className="absolute left-1/2 top-1/2 h-[58%] w-[54%] -translate-x-[4%] -translate-y-1/2 rounded-lg border border-dashed border-foreground/20 bg-background" />
+          </div>
+        ) : null}
+        <div className="relative z-10 grid h-11 w-11 place-items-center rounded-full border border-border bg-background text-foreground transition-colors group-hover:border-foreground/40">
           <Plus className="h-5 w-5" />
         </div>
       </div>
@@ -488,40 +536,93 @@ function WeekSelectionGrid({
   selectedWeekId,
   items,
   onSelect,
+  onAddWeek,
+  onEditWeek,
+  onDeleteWeek,
 }: {
   weeks: VisualPresentationWeek[];
   selectedWeekId: string | null;
   items: VisualItemWithImages[];
   onSelect: (weekId: string) => void;
+  onAddWeek?: () => void;
+  onEditWeek?: (week: VisualPresentationWeek) => void;
+  onDeleteWeek?: (week: VisualPresentationWeek) => void;
 }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="no-scrollbar flex gap-3 overflow-x-auto pb-1 sm:grid sm:grid-cols-2 sm:overflow-visible sm:pb-0 xl:grid-cols-4">
       {weeks.map((week) => {
         const isSelected = selectedWeekId === week.id;
         const weekItemCount = filterVisualItemsForWeek(items, week).length;
 
         return (
-          <button
+          <div
             key={week.id}
-            type="button"
-            onClick={() => onSelect(week.id)}
             className={cn(
-              "rounded-xl border border-dashed bg-background px-4 py-5 text-left transition-colors hover:border-foreground/40 hover:bg-foreground/[0.02]",
+              "group relative min-w-[156px] flex-none rounded-xl border border-dashed bg-background text-left transition-colors hover:border-foreground/40 hover:bg-foreground/[0.02] sm:min-w-0",
               isSelected
                 ? "border-[#1D10D7] bg-transparent dark:border-[#DFFF06]"
                 : "border-border",
             )}
           >
-            <span className="sora-heading block text-sm font-semibold uppercase text-foreground">
-              {week.actionLabel}
-            </span>
-            <span className="mt-1 block text-xs text-muted-foreground">{week.periodLabel}</span>
-            <span className="mt-3 inline-flex rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground">
-              {weekItemCount} {weekItemCount === 1 ? "item" : "itens"}
-            </span>
-          </button>
+            <button
+              type="button"
+              onClick={() => onSelect(week.id)}
+              className="w-full px-4 py-5 pr-14 text-left"
+            >
+              <span className="sora-heading block text-sm font-semibold uppercase text-foreground">
+                {week.actionLabel}
+              </span>
+              <span className="mt-1 block text-xs text-muted-foreground">{week.periodLabel}</span>
+              <span className="mt-3 inline-flex rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground">
+                {weekItemCount} {weekItemCount === 1 ? "item" : "itens"}
+              </span>
+            </button>
+            {onEditWeek || (onDeleteWeek && weeks.length > 1) ? (
+              <div className="absolute right-2 top-2 flex items-center gap-1 opacity-90 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+                {onEditWeek ? (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onEditWeek(week);
+                    }}
+                    className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
+                    aria-label={`Editar ${week.actionLabel}`}
+                    title="Editar semana"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                ) : null}
+                {onDeleteWeek && weeks.length > 1 ? (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onDeleteWeek(week);
+                    }}
+                    className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-rose-500/10 hover:text-rose-500"
+                    aria-label={`Excluir ${week.actionLabel}`}
+                    title="Excluir semana"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         );
       })}
+      {onAddWeek ? (
+        <button
+          type="button"
+          onClick={onAddWeek}
+          className="grid min-h-[118px] min-w-[156px] flex-none place-items-center rounded-xl border border-dashed border-border bg-background px-4 py-5 text-muted-foreground transition-colors hover:border-foreground/40 hover:bg-foreground/[0.02] hover:text-foreground sm:min-w-0"
+          aria-label="Adicionar semana"
+          title="Adicionar semana"
+        >
+          <Plus className="h-6 w-6" />
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -613,6 +714,16 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
   const [itemSelectionMode, setItemSelectionMode] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
   const [bulkDeletingItems, setBulkDeletingItems] = useState(false);
+  const [weekToDelete, setWeekToDelete] = useState<VisualPresentationWeek | null>(null);
+  const [weekToEdit, setWeekToEdit] = useState<VisualPresentationWeek | null>(null);
+  const [weekEditForm, setWeekEditForm] = useState<WeekEditForm>({
+    title: "",
+    startDate: "",
+    endDate: "",
+  });
+  const [savingWeekEdit, setSavingWeekEdit] = useState(false);
+  const [deletingWeek, setDeletingWeek] = useState(false);
+  const [visualConfirmAction, setVisualConfirmAction] = useState<VisualConfirmAction>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const itemsUndoStackRef = useRef<VisualItemWithImages[][]>([]);
@@ -1416,10 +1527,6 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
   }
 
   async function deleteItem(item: VisualItemWithImages) {
-    const confirmed = window.confirm("Excluir esta publicacao visual?");
-
-    if (!confirmed) return;
-
     setDeletingItemId(item.id);
     setError(null);
     setNotice(null);
@@ -1461,12 +1568,6 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
 
   async function deleteSelectedItems() {
     if (!selectedItemIds.length) return;
-
-    const confirmed = window.confirm(
-      `Excluir ${selectedItemIds.length} publicacao${selectedItemIds.length === 1 ? "" : "es"} visual${selectedItemIds.length === 1 ? "" : "is"}?`,
-    );
-
-    if (!confirmed) return;
 
     const selectedItems = items.filter((item) => selectedItemIds.includes(item.id));
     const storagePaths = selectedItems
@@ -1516,12 +1617,259 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
     setBulkDeletingItems(false);
   }
 
+  async function updatePresentationWeekCount(nextWeekCount: number) {
+    if (!presentation) return false;
+
+    const firstWeek = presentationWeeks[0];
+    const startDate =
+      firstWeek?.startDate ||
+      parseDayMonthLabel(presentation.start_display_date || presentation.period_label?.match(/\d{1,2}\/\d{1,2}/)?.[0] || "");
+
+    if (!startDate) {
+      setError("Nao foi possivel calcular o periodo da apresentacao.");
+      return false;
+    }
+
+    const startLabel = formatDayMonthLabel(startDate);
+    const endLabel = formatDayMonthLabel(addDaysToDate(startDate, Math.max(1, nextWeekCount) * 7 - 1));
+    const presentationType = presentationTypeFromWeekCount(nextWeekCount);
+
+    const { data, error: updateError } = await supabase
+      .from("visual_presentations")
+      .update({
+        start_display_date: startLabel,
+        end_display_date: endLabel,
+        period_label: `${startLabel} a ${endLabel}`,
+        presentation_type: presentationType,
+        updated_at: new Date().toISOString(),
+      } as never)
+      .eq("id", presentation.id)
+      .select("*")
+      .maybeSingle();
+
+    if (updateError) {
+      setError(updateError.message);
+      return false;
+    }
+
+    setPresentation((data as VisualPresentation | null) ?? {
+      ...presentation,
+      start_display_date: startLabel,
+      end_display_date: endLabel,
+      period_label: `${startLabel} a ${endLabel}`,
+      presentation_type: presentationType,
+    });
+    return true;
+  }
+
+  async function addPresentationWeek() {
+    setError(null);
+    setNotice(null);
+
+    const nextWeekCount = Math.max(1, presentationWeeks.length) + 1;
+    const updated = await updatePresentationWeekCount(nextWeekCount);
+
+    if (updated) {
+      setSelectedWeekId(`week-${nextWeekCount}`);
+      setNotice("Semana adicionada.");
+    }
+  }
+
+  function openWeekEditModal(week: VisualPresentationWeek) {
+    setSelectedWeekId(week.id);
+    setWeekToEdit(week);
+    setWeekEditForm({
+      title: week.actionLabel,
+      startDate: formatDateInput(week.startLabel),
+      endDate: formatDateInput(week.endLabel),
+    });
+    setError(null);
+    setNotice(null);
+  }
+
+  async function saveWeekEdit() {
+    if (!presentation || !weekToEdit) return;
+
+    const startDate = formatDateInput(weekEditForm.startDate);
+    const endDate = formatDateInput(weekEditForm.endDate);
+    const startDateError = getDayMonthInputError(startDate);
+    const endDateError = getDayMonthInputError(endDate);
+
+    if (startDateError) {
+      setError(`Data inicial: ${startDateError}`);
+      return;
+    }
+
+    if (endDateError) {
+      setError(`Data final: ${endDateError}`);
+      return;
+    }
+
+    setSavingWeekEdit(true);
+    setError(null);
+    setNotice(null);
+
+    const currentNotes = visualPresentationWeekNotesFromText(presentation.client_notes);
+    const nextWeekOverrides = {
+      ...currentNotes.weekOverrides,
+      [weekToEdit.id]: {
+        title: weekEditForm.title.trim() || weekToEdit.actionLabel,
+        startLabel: startDate,
+        endLabel: endDate,
+      },
+    };
+
+    const { data, error: requestError } = await supabase
+      .from("visual_presentations")
+      .update({
+        client_notes: buildVisualPresentationWeekNotes(currentNotes.clientNotes, nextWeekOverrides),
+        updated_at: new Date().toISOString(),
+      } as never)
+      .eq("id", presentation.id)
+      .select("*")
+      .maybeSingle();
+
+    if (requestError) {
+      setError(requestError.message);
+    } else {
+      setPresentation((data as VisualPresentation | null) ?? {
+        ...presentation,
+        client_notes: buildVisualPresentationWeekNotes(currentNotes.clientNotes, nextWeekOverrides),
+      });
+      setWeekToEdit(null);
+      setNotice("Semana atualizada.");
+    }
+
+    setSavingWeekEdit(false);
+  }
+
+  async function deleteItemsForWeek(week: VisualPresentationWeek) {
+    const weekItems = filterVisualItemsForWeek(items, week);
+    const itemIdsToDelete: string[] = [];
+    const imageIdsToDelete: string[] = [];
+    const storagePaths: string[] = [];
+    const itemUpdates: Array<{
+      itemId: string;
+      notes: string | null;
+      displayDate: string | null;
+      weekday: string | null;
+    }> = [];
+
+    weekItems.forEach((weekItem) => {
+      const fullItem = items.find((item) => item.id === weekItem.id) ?? weekItem;
+      const sortedImages = sortImagesByOrder(fullItem.images);
+      const weekImages = sortImagesByOrder(weekItem.images);
+      const isPartialStory =
+        visualFormatFromValue(fullItem.format) === "stories" &&
+        sortedImages.length > 0 &&
+        weekImages.length > 0 &&
+        weekImages.length < sortedImages.length;
+
+      if (!isPartialStory) {
+        itemIdsToDelete.push(fullItem.id);
+        storagePaths.push(
+          ...sortedImages.flatMap((image) => (image.image_path ? [image.image_path] : [])),
+          ...(fullItem.image_path ? [fullItem.image_path] : []),
+        );
+        return;
+      }
+
+      const removedImageIds = new Set(weekImages.map((image) => image.id));
+      const remainingImages = sortedImages.filter((image) => !removedImageIds.has(image.id));
+      const metadata = remainingImages.map((image, index) =>
+        storyImageMetadata({
+          notes: fullItem.notes,
+          imageId: image.id,
+          orderIndex: image.order_index ?? index,
+          fallbackDate: fullItem.display_date,
+          fallbackWeekday: fullItem.weekday,
+        }),
+      );
+      const firstMetadata = metadata[0];
+
+      imageIdsToDelete.push(...weekImages.map((image) => image.id));
+      storagePaths.push(...weekImages.flatMap((image) => (image.image_path ? [image.image_path] : [])));
+      itemUpdates.push({
+        itemId: fullItem.id,
+        notes: buildStoryImageNotes(remainingImages, metadata),
+        displayDate: firstMetadata?.displayDate ?? fullItem.display_date,
+        weekday: firstMetadata?.weekday ?? fullItem.weekday,
+      });
+    });
+
+    if (imageIdsToDelete.length) {
+      const { error: imageDeleteError } = await supabase
+        .from("visual_item_images")
+        .delete()
+        .in("id", imageIdsToDelete);
+
+      if (imageDeleteError) throw new Error(imageDeleteError.message);
+    }
+
+    if (itemIdsToDelete.length) {
+      const { error: imageRowsDeleteError } = await supabase
+        .from("visual_item_images")
+        .delete()
+        .in("visual_item_id", itemIdsToDelete);
+
+      if (imageRowsDeleteError) throw new Error(imageRowsDeleteError.message);
+
+      const { error: itemDeleteError } = await supabase
+        .from("visual_items")
+        .delete()
+        .in("id", itemIdsToDelete);
+
+      if (itemDeleteError) throw new Error(itemDeleteError.message);
+    }
+
+    for (const update of itemUpdates) {
+      const { error: itemUpdateError } = await supabase
+        .from("visual_items")
+        .update({
+          notes: update.notes,
+          display_date: update.displayDate,
+          weekday: update.weekday,
+        })
+        .eq("id", update.itemId);
+
+      if (itemUpdateError) throw new Error(itemUpdateError.message);
+    }
+
+    if (storagePaths.length) {
+      await Promise.all([
+        supabase.storage.from(visualPresentationsBucket).remove(storagePaths),
+        supabase.storage.from(legacyPresentationAssetsBucket).remove(storagePaths),
+      ]);
+    }
+  }
+
+  async function deletePresentationWeek(week: VisualPresentationWeek) {
+    if (!presentation || presentationWeeks.length <= 1) return;
+
+    setError(null);
+    setNotice(null);
+    setDeletingWeek(true);
+
+    try {
+      await deleteItemsForWeek(week);
+      const nextWeekCount = Math.max(1, presentationWeeks.length - 1);
+      const updated = await updatePresentationWeekCount(nextWeekCount);
+
+      if (updated) {
+        setSelectedWeekId(`week-${Math.min(week.index + 1, nextWeekCount)}`);
+        await loadPresentation();
+        setNotice("Semana excluida.");
+        setWeekToDelete(null);
+      }
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel excluir a semana.");
+    } finally {
+      setDeletingWeek(false);
+    }
+  }
+
   async function archivePresentation() {
     if (!presentation) return;
-
-    const confirmed = window.confirm("Arquivar esta apresentacao?");
-
-    if (!confirmed) return;
 
     setArchiving(true);
     setError(null);
@@ -1543,6 +1891,32 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
 
     setArchiving(false);
   }
+
+  async function confirmVisualAction() {
+    if (!visualConfirmAction) return;
+
+    const action = visualConfirmAction;
+
+    if (action.kind === "delete-item") await deleteItem(action.item);
+    if (action.kind === "delete-selected") await deleteSelectedItems();
+    if (action.kind === "archive-presentation") await archivePresentation();
+
+    setVisualConfirmAction(null);
+  }
+
+  const visualConfirmConfig = visualConfirmAction
+    ? {
+        title:
+          visualConfirmAction.kind === "archive-presentation"
+            ? "Arquivar apresentação"
+            : "Excluir publicação",
+        message:
+          visualConfirmAction.kind === "archive-presentation"
+            ? "Você tem certeza que quer arquivar este item? Ele sairá da lista principal e ficará disponível em Arquivados."
+            : "Você tem certeza que quer excluir este item? Essa ação não poderá ser desfeita.",
+        confirmLabel: visualConfirmAction.kind === "archive-presentation" ? "Arquivar" : "Excluir",
+      }
+    : null;
 
   async function copyPublicLink() {
     if (!presentation) return;
@@ -2144,7 +2518,7 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
                 variant="ghostSecondary"
                 size="sm"
                 className="h-8 px-2.5 text-xs"
-                onClick={archivePresentation}
+                onClick={() => setVisualConfirmAction({ kind: "archive-presentation" })}
                 disabled={archiving}
                 aria-label="Arquivar"
                 title="Arquivar"
@@ -2233,6 +2607,9 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
               selectedWeekId={selectedWeek?.id ?? null}
               items={items}
               onSelect={setSelectedWeekId}
+              onAddWeek={addPresentationWeek}
+              onEditWeek={openWeekEditModal}
+              onDeleteWeek={setWeekToDelete}
             />
           </div>
 
@@ -2739,7 +3116,7 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
                   type="button"
                   variant="ghostSecondary"
                   size="sm"
-                  onClick={deleteSelectedItems}
+	                onClick={() => setVisualConfirmAction({ kind: "delete-selected" })}
                   disabled={bulkDeletingItems}
                   className="text-rose-500 hover:text-rose-500"
                 >
@@ -2786,7 +3163,8 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
               className={cn(
                 "relative transition-transform duration-150 ease-out",
                 itemSelectionMode ? "cursor-default" : "cursor-grab active:cursor-grabbing",
-                isSelected && "rounded-2xl ring-1 ring-[var(--zacx-brand)]",
+	                isSelected &&
+	                  "rounded-2xl border border-blue-400 bg-blue-500/[0.06] p-1 dark:border-blue-400/60 dark:bg-blue-400/10",
                 visualItemDrag?.itemId === item.id && "scale-[1.01] shadow-sm shadow-black/10",
                 reorderingItemId === item.id && "opacity-75",
               )}
@@ -2806,7 +3184,7 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
                 items={[item]}
                 client={client}
                 onEdit={() => openEditForm(fullItem)}
-                onDelete={() => deleteItem(fullItem)}
+                onDelete={() => setVisualConfirmAction({ kind: "delete-item", item: fullItem })}
                 deletingItemId={deletingItemId}
                 theme={theme}
                 onQuickUpdate={handleQuickUpdate}
@@ -2827,6 +3205,183 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
           </CardContent>
         </Card>
         )
+      ) : null}
+
+      {visualConfirmConfig ? (
+        <div
+          className="fixed inset-0 z-[120] grid place-items-end bg-black/45 px-3 py-3 dark:bg-black/60 sm:place-items-center sm:px-4 sm:py-6"
+          onClick={() => {
+            if (!bulkDeletingItems && !archiving && !deletingItemId) setVisualConfirmAction(null);
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-border bg-background p-5 shadow-none"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 className="sora-heading text-xl font-medium text-foreground">{visualConfirmConfig.title}</h2>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">{visualConfirmConfig.message}</p>
+            <div className="mt-5 flex justify-end gap-3">
+              <Button
+                type="button"
+                variant="ghostSecondary"
+                onClick={() => setVisualConfirmAction(null)}
+                disabled={bulkDeletingItems || archiving || Boolean(deletingItemId)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                onClick={confirmVisualAction}
+                disabled={bulkDeletingItems || archiving || Boolean(deletingItemId)}
+                className={
+                  visualConfirmAction?.kind === "archive-presentation"
+                    ? "bg-[var(--zacx-brand)] text-white hover:opacity-90 dark:text-black"
+                    : "bg-rose-600 text-white hover:bg-rose-700"
+                }
+              >
+                {bulkDeletingItems || archiving || deletingItemId ? "Processando..." : visualConfirmConfig.confirmLabel}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {weekToEdit ? (
+        <div
+          className="fixed inset-0 z-[120] grid place-items-end bg-black/45 px-3 py-3 dark:bg-black/60 sm:place-items-center sm:px-4 sm:py-6"
+          onClick={() => {
+            if (!savingWeekEdit) setWeekToEdit(null);
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-border bg-background p-5 shadow-none"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="sora-heading text-xl font-medium text-foreground">Editar semana</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Ajuste o card sem alterar os uploads cadastrados.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWeekToEdit(null)}
+                disabled={savingWeekEdit}
+                className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
+                aria-label="Fechar edição"
+                title="Fechar"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="week-title">Título</Label>
+                <Input
+                  id="week-title"
+                  value={weekEditForm.title}
+                  onChange={(event) =>
+                    setWeekEditForm((current) => ({ ...current, title: event.target.value }))
+                  }
+                  placeholder={weekToEdit.actionLabel}
+                />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="week-start-date">Data inicial</Label>
+                  <Input
+                    id="week-start-date"
+                    inputMode="numeric"
+                    value={weekEditForm.startDate}
+                    onChange={(event) =>
+                      setWeekEditForm((current) => ({
+                        ...current,
+                        startDate: formatDateInput(event.target.value),
+                      }))
+                    }
+                    placeholder="DD/MM"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="week-end-date">Data final</Label>
+                  <Input
+                    id="week-end-date"
+                    inputMode="numeric"
+                    value={weekEditForm.endDate}
+                    onChange={(event) =>
+                      setWeekEditForm((current) => ({
+                        ...current,
+                        endDate: formatDateInput(event.target.value),
+                      }))
+                    }
+                    placeholder="DD/MM"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <Button
+                type="button"
+                variant="ghostSecondary"
+                onClick={() => setWeekToEdit(null)}
+                disabled={savingWeekEdit}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                onClick={saveWeekEdit}
+                disabled={savingWeekEdit}
+                className="bg-[var(--zacx-brand)] text-white hover:opacity-90 dark:text-black"
+              >
+                {savingWeekEdit ? "Salvando..." : "Salvar edição"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {weekToDelete ? (
+        <div
+          className="fixed inset-0 z-[120] grid place-items-end bg-black/45 px-3 py-3 dark:bg-black/60 sm:place-items-center sm:px-4 sm:py-6"
+          onClick={() => {
+            if (!deletingWeek) setWeekToDelete(null);
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-border bg-background p-5 shadow-none"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 className="sora-heading text-xl font-medium text-foreground">Excluir semana</h2>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+              Você tem certeza que quer excluir esta semana? Todos os posts, carrosséis, stories e arquivos dessa semana serão removidos.
+            </p>
+            <p className="mt-3 rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
+              {weekToDelete.actionLabel} - {weekToDelete.periodLabel}
+            </p>
+            <div className="mt-5 flex justify-end gap-3">
+              <Button
+                type="button"
+                variant="ghostSecondary"
+                onClick={() => setWeekToDelete(null)}
+                disabled={deletingWeek}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                onClick={() => deletePresentationWeek(weekToDelete)}
+                disabled={deletingWeek}
+                className="bg-rose-600 text-white hover:bg-rose-700"
+              >
+                {deletingWeek ? "Excluindo..." : "Excluir semana"}
+              </Button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </section>
   );

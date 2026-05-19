@@ -196,7 +196,7 @@ function PublicWeekSelection({
   onSelectWeek: (weekId: string) => void;
 }) {
   return (
-    <section className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <section className="no-scrollbar mt-5 flex gap-3 overflow-x-auto pb-1 sm:grid sm:grid-cols-2 sm:overflow-visible sm:pb-0 lg:grid-cols-4">
       {weeks.map((week) => {
         const itemCount = filterVisualItemsForWeek(items, week).length;
 
@@ -206,14 +206,14 @@ function PublicWeekSelection({
             type="button"
             onClick={() => onSelectWeek(week.id)}
             className={cn(
-              "rounded-xl border border-dashed bg-background px-4 py-5 text-left transition-colors hover:border-foreground/35 hover:bg-foreground/[0.02]",
+              "min-w-[156px] flex-none rounded-xl border border-dashed bg-background px-3 py-4 text-left transition-colors hover:border-foreground/35 hover:bg-foreground/[0.02] sm:min-w-0 sm:px-4 sm:py-5",
               selectedWeekId === week.id
-                ? "border-[var(--zacx-brand)] dark:border-[var(--zacx-brand)]"
+                ? "border-[#1D10D7] dark:border-[#DFFF06]"
                 : "border-border",
             )}
           >
             <span className="sora-heading block text-sm font-semibold uppercase text-foreground">{week.actionLabel}</span>
-            <span className="mt-1 block text-xs text-muted-foreground">{week.periodLabel}</span>
+            <span className="mt-1 block text-[11px] text-muted-foreground sm:text-xs">{week.periodLabel}</span>
             <span className="mt-3 inline-flex rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground">
               {itemCount} {itemCount === 1 ? "item" : "itens"}
             </span>
