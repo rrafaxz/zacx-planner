@@ -330,7 +330,7 @@ function WeekdayControl({
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="no-scrollbar flex max-w-full flex-nowrap gap-1.5 overflow-x-auto sm:flex-wrap sm:gap-2">
       {weekdays.map((weekday) => {
         const isActive = value === weekday;
 
@@ -341,8 +341,8 @@ function WeekdayControl({
             onClick={() => onChange(weekday)}
             className={
               isActive
-                ? "h-10 min-w-10 rounded-full border border-primary bg-primary px-3 text-xs font-semibold text-primary-foreground"
-                : "h-10 min-w-10 rounded-full border border-border bg-background px-3 text-xs font-semibold text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                ? "h-8 min-w-9 rounded-md border border-primary bg-primary px-2 text-[11px] font-semibold text-primary-foreground sm:h-10 sm:min-w-10 sm:rounded-full sm:px-3 sm:text-xs"
+                : "h-8 min-w-9 rounded-md border border-border bg-background px-2 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground sm:h-10 sm:min-w-10 sm:rounded-full sm:px-3 sm:text-xs"
             }
           >
             {weekday}
@@ -386,7 +386,7 @@ function AddFormatCard({
       onDragLeave={(event) => event.currentTarget.classList.remove("border-foreground/40")}
       onDrop={handleDrop}
       className={cn(
-        "group relative flex min-w-[132px] cursor-pointer flex-col justify-center rounded-2xl border border-dashed border-border bg-background p-3 text-center transition-colors hover:border-foreground/40 hover:bg-foreground/[0.03] md:min-w-0",
+        "group relative flex min-w-[118px] cursor-pointer flex-col justify-center rounded-xl border border-dashed border-border bg-background p-2.5 text-center transition-colors hover:border-foreground/40 hover:bg-foreground/[0.03] md:min-w-0 md:rounded-2xl md:p-3",
         active && "border-foreground/50 bg-foreground/[0.04]",
       )}
     >
@@ -402,30 +402,30 @@ function AddFormatCard({
         }}
       />
       {format === "carousel" ? (
-        <div className={cn("relative mx-auto grid w-full max-w-[118px] place-items-center overflow-visible", shapeClass)}>
+        <div className={cn("relative mx-auto grid w-full max-w-[96px] place-items-center overflow-visible sm:max-w-[118px]", shapeClass)}>
           <span className="pointer-events-none absolute -left-2 top-[13%] z-0 h-[74%] w-[42%] rounded-xl border border-dashed border-foreground/20 bg-background" />
           <span className="pointer-events-none absolute -right-2 top-[13%] z-0 h-[74%] w-[42%] rounded-xl border border-dashed border-foreground/20 bg-background" />
           <div className="relative z-10 grid h-full w-[82%] place-items-center rounded-xl border border-dashed border-border bg-background transition-colors group-hover:border-foreground/40">
-            <div className="grid h-11 w-11 place-items-center rounded-full border border-border bg-background text-foreground transition-colors group-hover:border-foreground/40">
-              <Plus className="h-5 w-5" />
+            <div className="grid h-9 w-9 place-items-center rounded-full border border-border bg-background text-foreground transition-colors group-hover:border-foreground/40 sm:h-11 sm:w-11">
+              <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
           </div>
         </div>
       ) : (
         <div
           className={cn(
-            "mx-auto grid w-full max-w-[118px] place-items-center rounded-xl border border-dashed border-border bg-background transition-colors group-hover:border-foreground/40",
+            "mx-auto grid w-full max-w-[96px] place-items-center rounded-xl border border-dashed border-border bg-background transition-colors group-hover:border-foreground/40 sm:max-w-[118px]",
             "relative",
             shapeClass,
           )}
         >
-          <div className="relative z-10 grid h-11 w-11 place-items-center rounded-full border border-border bg-background text-foreground transition-colors group-hover:border-foreground/40">
-            <Plus className="h-5 w-5" />
+          <div className="relative z-10 grid h-9 w-9 place-items-center rounded-full border border-border bg-background text-foreground transition-colors group-hover:border-foreground/40 sm:h-11 sm:w-11">
+            <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
           </div>
         </div>
       )}
-      <span className="sora-heading mt-3 text-sm font-medium text-foreground">{label}</span>
-      <span className="mt-1 text-[11px] text-muted-foreground">{description}</span>
+      <span className="sora-heading mt-2 text-xs font-medium text-foreground sm:mt-3 sm:text-sm">{label}</span>
+      <span className="mt-0.5 text-[10px] text-muted-foreground sm:mt-1 sm:text-[11px]">{description}</span>
     </label>
   );
 }
@@ -554,7 +554,7 @@ function WeekSelectionGrid({
   onDeleteWeek?: (week: VisualPresentationWeek) => void;
 }) {
   return (
-    <div className="no-scrollbar flex gap-3 overflow-x-auto pb-1 sm:grid sm:grid-cols-2 sm:overflow-visible sm:pb-0 xl:grid-cols-4">
+    <div className="no-scrollbar flex max-w-full snap-x snap-mandatory gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-2 sm:gap-3 sm:overflow-visible sm:pb-0 xl:grid-cols-4">
       {weeks.map((week) => {
         const isSelected = selectedWeekId === week.id;
         const weekItemCount = filterVisualItemsForWeek(items, week).length;
@@ -563,7 +563,7 @@ function WeekSelectionGrid({
           <div
             key={week.id}
             className={cn(
-              "group relative min-w-[156px] flex-none rounded-xl border border-dashed bg-background text-left transition-colors hover:border-foreground/40 hover:bg-foreground/[0.02] sm:min-w-0",
+              "group relative min-w-[138px] flex-none snap-start rounded-lg border border-dashed bg-background text-left transition-colors hover:border-foreground/40 hover:bg-foreground/[0.02] sm:min-w-0 sm:rounded-xl",
               isSelected
                 ? "border-[#1D10D7] bg-neutral-900/[0.045] dark:border-[#DFFF06] dark:bg-[#DFFF06]/[0.07]"
                 : "border-border",
@@ -572,18 +572,18 @@ function WeekSelectionGrid({
             <button
               type="button"
               onClick={() => onSelect(week.id)}
-              className="w-full px-4 py-5 pr-14 text-left"
+              className="w-full px-3 py-3.5 pr-11 text-left sm:px-4 sm:py-5 sm:pr-14"
             >
-              <span className="sora-heading block text-sm font-semibold uppercase text-foreground">
+              <span className="sora-heading block text-xs font-semibold uppercase text-foreground sm:text-sm">
                 {week.actionLabel}
               </span>
-              <span className="mt-1 block text-xs text-muted-foreground">{week.periodLabel}</span>
-              <span className="mt-3 inline-flex rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground">
+              <span className="mt-1 block text-[11px] text-muted-foreground sm:text-xs">{week.periodLabel}</span>
+              <span className="mt-2 inline-flex rounded-md border border-border px-2 py-0.5 text-[10px] text-muted-foreground sm:mt-3 sm:rounded-full sm:px-2.5 sm:py-1 sm:text-[11px]">
                 {weekItemCount} {weekItemCount === 1 ? "item" : "itens"}
               </span>
             </button>
             {onEditWeek || (onDeleteWeek && weeks.length > 1) ? (
-              <div className="absolute right-2 top-2 flex items-center gap-1 opacity-90 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+              <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5 opacity-90 transition-opacity md:right-2 md:top-2 md:gap-1 md:opacity-0 md:group-hover:opacity-100">
                 {onEditWeek ? (
                   <button
                     type="button"
@@ -591,7 +591,7 @@ function WeekSelectionGrid({
                       event.stopPropagation();
                       onEditWeek(week);
                     }}
-                    className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
+                    className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground sm:h-7 sm:w-7"
                     aria-label={`Editar ${week.actionLabel}`}
                     title="Editar semana"
                   >
@@ -605,7 +605,7 @@ function WeekSelectionGrid({
                       event.stopPropagation();
                       onDeleteWeek(week);
                     }}
-                    className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-rose-500/10 hover:text-rose-500"
+                    className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-rose-500/10 hover:text-rose-500 sm:h-7 sm:w-7"
                     aria-label={`Excluir ${week.actionLabel}`}
                     title="Excluir semana"
                   >
@@ -621,7 +621,7 @@ function WeekSelectionGrid({
         <button
           type="button"
           onClick={onAddWeek}
-          className="grid min-h-[118px] min-w-[156px] flex-none place-items-center rounded-xl border border-dashed border-border bg-background px-4 py-5 text-muted-foreground transition-colors hover:border-foreground/40 hover:bg-foreground/[0.02] hover:text-foreground sm:min-w-0"
+          className="grid min-h-[96px] min-w-[138px] flex-none snap-start place-items-center rounded-lg border border-dashed border-border bg-background px-3 py-3.5 text-muted-foreground transition-colors hover:border-foreground/40 hover:bg-foreground/[0.02] hover:text-foreground sm:min-h-[118px] sm:min-w-0 sm:rounded-xl sm:px-4 sm:py-5"
           aria-label="Adicionar semana"
           title="Adicionar semana"
         >
@@ -692,10 +692,10 @@ function VisualPreviewItemSection({
   }
 
   return (
-    <section className="space-y-5 md:space-y-10">
+    <section className="space-y-3 md:space-y-10">
       <div className="mx-auto grid w-full max-w-xl grid-cols-2 gap-2">
         <div
-          className="flex h-12 items-center justify-center rounded-lg px-3 text-sm font-medium sm:h-14 md:text-base"
+          className="flex h-10 items-center justify-center rounded-md px-2 text-xs font-medium sm:h-14 sm:rounded-lg sm:px-3 sm:text-sm md:text-base"
           style={{ backgroundColor: primaryColor, color: primaryTextColor }}
         >
           {editable ? (
@@ -709,7 +709,7 @@ function VisualPreviewItemSection({
                   event.currentTarget.blur();
                 }
               }}
-              className="h-9 w-20 rounded-md border border-white/30 bg-transparent px-2 text-center text-sm font-medium outline-none"
+              className="h-8 w-16 rounded-md border border-white/30 bg-transparent px-1.5 text-center text-xs font-medium outline-none sm:h-9 sm:w-20 sm:px-2 sm:text-sm"
               aria-label="Editar data"
             />
           ) : (
@@ -720,14 +720,14 @@ function VisualPreviewItemSection({
           )}
         </div>
         <div
-          className="flex h-12 items-center justify-center rounded-lg px-3 text-center text-xs font-medium uppercase sm:h-14 sm:text-sm md:text-base"
+          className="flex h-10 items-center justify-center rounded-md px-2 text-center text-[11px] font-medium uppercase sm:h-14 sm:rounded-lg sm:px-3 sm:text-sm md:text-base"
           style={{ backgroundColor: secondaryColor, color: secondaryTextColor }}
         >
           {editable ? (
             <select
               value={normalizeWeekdayValue(weekday)}
               onChange={(event) => saveWeekday(event.target.value)}
-              className="h-9 rounded-md border border-white/30 bg-transparent px-2 text-center text-xs font-medium uppercase outline-none"
+              className="h-8 max-w-full rounded-md border border-white/30 bg-transparent px-1.5 text-center text-[11px] font-medium uppercase outline-none sm:h-9 sm:px-2 sm:text-xs"
               aria-label="Editar dia"
             >
               {weekdays.map((weekdayOption) => (
@@ -2525,11 +2525,11 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
   const secondaryColor = client?.secondary_color || primaryColor;
 
   return (
-    <section className="space-y-6">
-      <div className="sticky top-14 z-50 -mx-4 -mt-6 border-b border-border bg-background md:top-0 md:-mx-8 md:-mt-8">
-        <div className="flex flex-col gap-2 px-3 py-4 md:px-5">
-          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex min-w-0 items-center gap-3 lg:flex-1">
+    <section className="space-y-4 md:space-y-6">
+      <div className="z-50 border-b border-border bg-background md:sticky md:top-0 md:-mx-8 md:-mt-8">
+        <div className="flex flex-col gap-1.5 px-0 py-2 md:px-5 md:py-4">
+          <div className="flex flex-col gap-1.5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex min-w-0 items-center gap-2 lg:flex-1">
               <Button
                 asChild
                 variant="ghostSecondary"
@@ -2544,7 +2544,7 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
               </Button>
 
               <div className="min-w-0 flex-1">
-                <h1 className="sora-heading truncate px-1 text-xl font-medium tracking-normal text-foreground md:text-2xl">
+                <h1 className="sora-heading truncate px-1 text-base font-medium tracking-normal text-foreground md:text-2xl">
                   {presentation.title}
                 </h1>
                 <p className={cn("mt-0.5 truncate px-1 text-[11px]", mutedTextClass)}>
@@ -2553,15 +2553,15 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
               </div>
             </div>
 
-            <div className="flex w-full flex-wrap items-center justify-center gap-1.5 lg:w-auto lg:justify-end">
-              <div className="inline-flex h-9 shrink-0 items-center justify-center rounded-md border border-border bg-background p-0.5 text-muted-foreground lg:h-8">
+            <div className="no-scrollbar flex w-full min-w-0 flex-nowrap items-center justify-start gap-1 overflow-x-auto lg:w-auto lg:justify-end">
+              <div className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-border bg-background p-0.5 text-muted-foreground lg:h-8">
                 {(["visual", "edit"] as EditorMode[]).map((mode) => (
                   <button
                     key={mode}
                     type="button"
                     onClick={() => setEditorMode(mode)}
                     className={cn(
-                      "inline-flex h-8 items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-xs font-medium transition-all focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 lg:h-7 lg:px-2.5",
+                      "inline-flex h-7 items-center justify-center whitespace-nowrap rounded-md px-2.5 py-1 text-[11px] font-medium transition-all focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 lg:text-xs",
                       editorMode === mode
                         ? "bg-background text-foreground shadow-sm"
                         : "text-muted-foreground hover:text-foreground",
@@ -2575,7 +2575,7 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
                 type="button"
                 variant="ghostSecondary"
                 size="sm"
-                className="h-8 px-2.5 text-xs"
+                className="h-8 shrink-0 px-2 text-xs md:px-2.5"
                 onClick={copyPublicLink}
                 aria-label="Copiar link publico"
                 title="Copiar link publico"
@@ -2583,7 +2583,7 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
                 <Clipboard className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">{copied ? "Copiado" : "Copiar link publico"}</span>
               </Button>
-              <Button asChild variant="ghostSecondary" size="sm" className="h-8 px-2.5 text-xs">
+              <Button asChild variant="ghostSecondary" size="sm" className="h-8 shrink-0 px-2 text-xs md:px-2.5">
                 <Link href={`/a/${presentation.public_slug}`} target="_blank" rel="noreferrer" aria-label="Abrir publico" title="Abrir publico">
                   <ExternalLink className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">Abrir publico</span>
@@ -2593,7 +2593,7 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
                 type="button"
                 variant="ghostSecondary"
                 size="sm"
-                className="h-8 px-2.5 text-xs"
+                className="h-8 shrink-0 px-2 text-xs md:px-2.5"
                 onClick={() => setVisualConfirmAction({ kind: "archive-presentation" })}
                 disabled={archiving}
                 aria-label="Arquivar"
@@ -2620,9 +2620,9 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
       ) : null}
 
       {editorMode === "visual" ? (
-        <section className="space-y-7">
+        <section className="space-y-5 md:space-y-7">
           {hasMultipleWeeks ? (
-            <div className="space-y-3">
+            <div className="space-y-2.5 md:space-y-3">
               <SectionTitleWithTooltip
                 title="Semanas"
                 tooltip="Aqui você organiza a apresentação por semana. Clique em uma semana para abrir os uploads e itens dessa semana."
@@ -2636,10 +2636,10 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
             </div>
           ) : null}
 
-          <div className="space-y-6">
-            <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+          <div className="space-y-4 md:space-y-6">
+            <div className="mb-3 flex flex-wrap items-end justify-between gap-2 md:mb-5 md:gap-3">
               <div>
-                <h2 className="sora-heading text-base font-semibold text-foreground">
+                <h2 className="sora-heading text-sm font-semibold text-foreground md:text-base">
                   {selectedWeek?.label || "Prévia da apresentação"}
                 </h2>
                 <p className={cn("text-xs", mutedTextClass)}>
@@ -2652,7 +2652,7 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
             </div>
 
             {selectedWeekItems.length ? (
-              <div className="space-y-8 md:space-y-12">
+            <div className="space-y-5 md:space-y-12">
                 {selectedWeekItems.map((item) => (
                   <VisualPreviewItemSection
                     key={item.id}
@@ -2674,8 +2674,8 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
           </div>
         </section>
       ) : (
-        <section className="space-y-8">
-          <div className="space-y-3">
+        <section className="space-y-5 md:space-y-8">
+          <div className="space-y-2.5 md:space-y-3">
             <SectionTitleWithTooltip
               title="Semanas"
               tooltip="Aqui você organiza a apresentação por semana. Clique em uma semana para abrir os uploads e itens dessa semana."
@@ -2691,12 +2691,12 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
             />
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2.5 md:space-y-3">
             <SectionTitleWithTooltip
               title="Uploads"
               tooltip="Aqui você adiciona posts, carrosséis e stories da semana selecionada."
             />
-            <div className="no-scrollbar grid auto-cols-[minmax(132px,1fr)] grid-flow-col gap-3 overflow-x-auto pb-1 md:grid-flow-row md:grid-cols-3 md:overflow-visible">
+            <div className="no-scrollbar grid max-w-full auto-cols-[minmax(118px,42vw)] grid-flow-col gap-2 overflow-x-auto pb-1 md:grid-flow-row md:grid-cols-3 md:gap-3 md:overflow-visible">
               {publicationTypes.map((type) => (
                 <AddFormatCard
                   key={type.format}

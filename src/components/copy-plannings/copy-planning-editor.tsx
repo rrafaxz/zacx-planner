@@ -379,10 +379,10 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
   }
 
   return (
-    <section className="planning-editor-shell relative -my-6 min-h-screen [--planning-header-height:84px] [--planning-header-offset:3.5rem] [--planning-side-nav-top:calc(var(--planning-header-offset)_+_var(--planning-header-height)_+_var(--planning-toolbar-height)_+_12px)] [--planning-toolbar-height:46px] md:-my-8 md:[--planning-header-height:110px] md:[--planning-toolbar-height:58px] lg:[--planning-header-height:77px] lg:[--planning-header-offset:0px]">
+    <section className="planning-editor-shell relative -my-4 min-h-screen [--planning-header-height:70px] [--planning-header-offset:3.5rem] [--planning-side-nav-top:calc(var(--planning-header-offset)_+_var(--planning-header-height)_+_var(--planning-toolbar-height)_+_12px)] [--planning-sticky-header-height:96px] [--planning-toolbar-height:52px] sm:-my-6 md:-my-8 md:[--planning-header-height:110px] md:[--planning-toolbar-height:58px] lg:[--planning-header-height:77px] lg:[--planning-header-offset:0px]">
       <Tabs defaultValue="visual" className="min-h-screen">
-        <div className="sticky top-14 z-50 border-b border-border bg-background md:top-0">
-          <div className="flex min-h-[var(--planning-header-height)] flex-col justify-center gap-1.5 px-2.5 py-2 md:gap-2 md:px-5 md:py-3 lg:py-0">
+        <div className="sticky top-14 z-[90] border-b border-border bg-background md:top-0 md:z-50">
+          <div className="flex min-h-[var(--planning-header-height)] flex-col justify-center gap-1 px-0 py-2 md:gap-2 md:px-5 md:py-3 lg:py-0">
             <div className="flex min-w-0 flex-col gap-1.5 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex min-w-0 items-center gap-2 lg:flex-1">
                 <Button
@@ -424,7 +424,7 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
                 </div>
               </div>
 
-              <div className="flex w-full min-w-0 flex-nowrap items-center justify-start gap-1 overflow-x-auto lg:w-auto lg:justify-end">
+              <div className="no-scrollbar flex w-full min-w-0 flex-nowrap items-center justify-start gap-1 overflow-x-auto lg:w-auto lg:justify-end">
                 <TabsList className="h-8 shrink-0 rounded-md border border-border bg-background p-0.5 lg:h-8">
                   <TabsTrigger value="visual" className="h-7 px-2.5 py-1 text-[11px] lg:h-7 lg:text-xs">
                     Visual
@@ -518,11 +518,11 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
             clientName={client?.name}
             emptyText="Cole ou escreva o conteudo desta secao."
             workspaceLayout
-            toolbarClassName="!top-[calc(var(--planning-header-offset)_+_var(--planning-header-height))] z-40 mb-0 rounded-none border-x-0 border-t-0 border-b border-border px-2 py-1.5 shadow-none md:px-5 md:py-2"
+            toolbarClassName="z-[80] !top-[calc(3.5rem+var(--planning-sticky-header-height))] mb-0 min-h-[var(--planning-toolbar-height)] rounded-none border-x-0 border-t-0 border-b border-border px-2 py-1.5 shadow-none md:z-40 md:!top-[calc(var(--planning-header-offset)_+_var(--planning-header-height))] md:px-5 md:py-2"
             sectionNavigationClassName="lg:!top-[var(--planning-side-nav-top)]"
             onImageUpload={uploadPlanningAsset}
             sectionNavigation={
-              <nav className="no-scrollbar flex max-w-full gap-1 overflow-x-auto border-y border-border bg-background p-2 lg:min-h-[calc(68vh+5rem)] lg:flex-col lg:overflow-visible lg:rounded-xl lg:border lg:p-3.5">
+              <nav className="grid w-full max-w-full min-w-0 grid-cols-3 gap-1.5 overflow-hidden border-y border-border bg-background p-2 lg:min-h-[calc(68vh+5rem)] lg:flex lg:flex-col lg:overflow-visible lg:rounded-xl lg:border lg:p-3.5">
                 {copySectionMeta.map((section) => {
                   const isActive = activeSection === section.key;
 
@@ -532,7 +532,7 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
                       type="button"
                       onClick={() => setActiveSection(section.key)}
                       className={cn(
-                        "min-w-max shrink-0 rounded-lg px-3 py-2 text-left text-xs font-medium transition-colors lg:min-w-0 lg:px-4 lg:py-3.5 lg:text-sm",
+                        "min-w-0 rounded-lg px-1.5 py-2 text-center text-[10px] font-medium leading-tight transition-colors sm:text-xs lg:px-4 lg:py-3.5 lg:text-left lg:text-sm",
                         isActive
                           ? "bg-foreground text-background"
                           : "text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground",
@@ -587,11 +587,13 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
 	        </div>
 	      ) : null}
 	      <style jsx global>{`
-        .planning-editor-shell {
-          width: 100vw;
-          margin-left: calc(50% - 50vw);
-          margin-right: calc(50% - 50vw);
-        }
+          .planning-editor-shell {
+            width: 100%;
+            max-width: 100%;
+            margin-left: 0;
+            margin-right: 0;
+            box-sizing: border-box;
+          }
 
         @media (min-width: 768px) {
           .planning-editor-shell {
@@ -601,11 +603,6 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
           }
         }
 
-        @media (max-width: 767px) {
-          .planning-editor-shell {
-            overflow-x: hidden;
-          }
-        }
       `}</style>
     </section>
   );

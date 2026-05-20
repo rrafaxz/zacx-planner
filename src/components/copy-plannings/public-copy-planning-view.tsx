@@ -219,7 +219,7 @@ export function PublicCopyPlanningView({ slug }: PublicCopyPlanningViewProps) {
               sectionNavigationClassName="lg:!top-6 lg:-ml-5"
               sectionNavigation={
                 visibleSectionKeys.length ? (
-                  <nav className="flex gap-1 overflow-x-auto border-y border-border bg-background p-2 lg:w-[210px] lg:flex-col lg:overflow-visible lg:rounded-xl lg:border lg:p-3.5">
+                  <nav className="grid w-full max-w-full min-w-0 grid-cols-3 gap-1.5 overflow-hidden border-y border-border bg-background p-2 lg:w-[210px] lg:flex lg:flex-col lg:overflow-visible lg:rounded-xl lg:border lg:p-3.5">
                     {copySectionMeta
                       .filter((section) => visibleSectionKeys.includes(section.key))
                       .map((section) => {
@@ -231,7 +231,7 @@ export function PublicCopyPlanningView({ slug }: PublicCopyPlanningViewProps) {
                             type="button"
                             onClick={() => setActiveSection(section.key)}
                             className={cn(
-                              "min-w-max rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors lg:min-w-0 lg:px-4 lg:py-3.5",
+                              "min-w-0 rounded-lg px-1.5 py-2 text-center text-[10px] font-medium leading-tight transition-colors sm:text-xs lg:px-4 lg:py-3.5 lg:text-left lg:text-sm",
                               isActive
                                 ? "bg-foreground text-background"
                                 : "text-muted-foreground hover:bg-secondary hover:text-foreground",

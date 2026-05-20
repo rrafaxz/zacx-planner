@@ -94,7 +94,7 @@ const monthOptions = [
   { value: "12", label: "DEZ" },
 ];
 const compactSelectClass =
-  "h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus:border-neutral-400 dark:focus:border-white/35";
+  "h-10 min-w-0 max-w-full rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus:border-neutral-400 dark:focus:border-white/35";
 
 function createdMonth(value?: string | null) {
   if (!value) return "";
@@ -177,15 +177,15 @@ function BarChart({
 
   return (
     <Card className="bg-background shadow-none">
-      <CardHeader>
-        <CardTitle className="text-base">{title}</CardTitle>
+      <CardHeader className="p-4 md:p-6">
+        <CardTitle className="text-sm leading-snug md:text-base">{title}</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-4 pt-0 md:p-6 md:pt-0">
         {maxValue ? (
           <div className="grid gap-3">
             {data.map((item) => (
-              <div key={item.label} className="grid grid-cols-[76px_1fr_36px] items-center gap-3 text-sm">
-                <span className="text-xs text-muted-foreground">{item.label}</span>
+              <div key={item.label} className="grid min-w-0 grid-cols-[52px_minmax(0,1fr)_30px] items-center gap-2 text-sm sm:grid-cols-[76px_1fr_36px] sm:gap-3">
+                <span className="min-w-0 truncate text-[11px] text-muted-foreground sm:text-xs">{item.label}</span>
                 <span className="h-2.5 overflow-hidden rounded-full bg-foreground/[0.08]">
                   <span
                     className="block h-full rounded-full bg-[var(--zacx-brand)]"
@@ -206,13 +206,13 @@ function BarChart({
 
 function metricCard(label: string, value: number | string, description: string, Icon: typeof UsersRound) {
   return (
-    <Card key={label} className="border-border/70 bg-background shadow-none">
-      <CardHeader className="flex-row items-start justify-between gap-3 p-4 pb-2 md:p-5 md:pb-3">
-        <div>
-          <CardDescription className="text-xs md:text-sm">{label}</CardDescription>
-          <CardTitle className="mt-2 text-2xl md:mt-3 md:text-3xl">{value}</CardTitle>
+    <Card key={label} className="min-w-0 border-border/70 bg-background shadow-none">
+      <CardHeader className="flex-row items-start justify-between gap-2 p-3 pb-2 md:p-5 md:pb-3">
+        <div className="min-w-0">
+          <CardDescription className="break-words text-[11px] leading-snug md:text-sm">{label}</CardDescription>
+          <CardTitle className="mt-1.5 text-xl leading-none md:mt-3 md:text-3xl">{value}</CardTitle>
         </div>
-        <Icon className="h-5 w-5 text-muted-foreground" />
+        <Icon className="h-4 w-4 shrink-0 text-muted-foreground md:h-5 md:w-5" />
       </CardHeader>
       <CardContent className="hidden px-4 pb-4 md:block md:px-5 md:pb-5">
         <p className="text-sm text-muted-foreground">{description}</p>
@@ -609,10 +609,10 @@ export function AdminDashboard() {
               <TabsTrigger
                 key={tab.value}
                 value={tab.value}
-                className="h-10 gap-2 rounded-md border border-border bg-background px-3 text-sm text-muted-foreground data-[state=active]:border-foreground/30 data-[state=active]:bg-background data-[state=active]:text-foreground"
+                className="h-10 min-w-0 gap-1.5 rounded-md border border-border bg-background px-2 text-[11px] leading-tight text-muted-foreground data-[state=active]:border-foreground/30 data-[state=active]:bg-background data-[state=active]:text-foreground sm:gap-2 sm:px-3 sm:text-sm"
               >
-                <Icon className="h-4 w-4" />
-                {tab.label}
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="min-w-0 truncate">{tab.label}</span>
               </TabsTrigger>
             );
           })}

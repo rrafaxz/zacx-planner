@@ -357,7 +357,7 @@ const compactControlClass =
   "border-input bg-background text-foreground transition-colors focus-visible:border-neutral-400 focus-visible:outline-none focus-visible:ring-0 dark:focus-visible:border-white/35";
 
 const sectionIconButtonClass =
-  "h-10 w-10 rounded-lg border border-border bg-background p-0 text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground focus-visible:ring-0 focus-visible:border-neutral-400 dark:focus-visible:border-white/35";
+  "h-9 w-9 rounded-md border border-border bg-background p-0 text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground focus-visible:ring-0 focus-visible:border-neutral-400 dark:focus-visible:border-white/35 sm:h-10 sm:w-10 sm:rounded-lg";
 
 const filterPopoverClass =
   "absolute right-0 top-[calc(100%+0.5rem)] z-30 hidden w-72 rounded-2xl border border-border bg-background p-4 shadow-none md:block";
@@ -460,7 +460,7 @@ function LibraryCreateButton({
 
 function InfoTag({ children }: { children: string }) {
   return (
-    <span className="rounded-full border border-border bg-secondary/45 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-normal text-muted-foreground sm:px-2.5 sm:py-1 sm:text-[10px]">
+    <span className="shrink-0 rounded-md border border-border bg-secondary/45 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-normal text-muted-foreground sm:px-2.5 sm:py-1 sm:text-[10px]">
       {children}
     </span>
   );
@@ -468,7 +468,7 @@ function InfoTag({ children }: { children: string }) {
 
 function PresentationMonthTag({ children }: { children: string }) {
   return (
-    <span className="shrink-0 rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-semibold text-muted-foreground sm:px-3 sm:py-1 sm:text-xs">
+    <span className="shrink-0 rounded-md border border-border bg-background px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground sm:px-3 sm:py-1 sm:text-xs">
       {children}
     </span>
   );
@@ -600,11 +600,11 @@ function DocumentThumbnail({
   accentColor: string;
 }) {
   return (
-    <div className="h-24 overflow-hidden rounded-lg border border-black/10 bg-white p-2 text-neutral-950 sm:h-32 sm:p-2.5">
-      <div className="mx-auto mb-2 h-1 w-9 rounded-full" style={{ backgroundColor: accentColor }} />
+    <div className="h-28 overflow-hidden rounded-lg border border-black/10 bg-white p-2 text-neutral-950 sm:h-32 sm:p-2.5">
+      <div className="mx-auto mb-1.5 h-0.5 w-8 rounded-full sm:mb-2 sm:h-1 sm:w-9" style={{ backgroundColor: accentColor }} />
       {preview ? (
         <p
-          className="text-[8px] leading-3 text-neutral-500 sm:text-[9px] sm:leading-3.5"
+          className="text-[7.5px] leading-3 text-neutral-500 sm:text-[9px] sm:leading-3.5"
           style={{
             display: "-webkit-box",
             WebkitLineClamp: 9,
@@ -636,7 +636,7 @@ function PresentationThumbnail({
   detailColor?: string | null;
 }) {
   return (
-    <div className="relative h-32 overflow-hidden rounded-lg border border-border bg-secondary sm:h-48">
+    <div className="relative h-24 overflow-hidden rounded-lg border border-border bg-secondary sm:h-48">
       {imageUrl ? (
         <Image
           src={imageUrl}
@@ -647,14 +647,14 @@ function PresentationThumbnail({
           className="object-cover transition duration-300 group-hover:scale-[1.03]"
         />
       ) : (
-        <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
+        <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground sm:gap-3">
           <div
-            className="grid h-14 w-14 place-items-center rounded-2xl border border-border bg-background"
+            className="grid h-10 w-10 place-items-center rounded-xl border border-border bg-background sm:h-14 sm:w-14 sm:rounded-2xl"
             style={{ color: detailColor || "#A3E635" }}
           >
-            <ImagePlus className="h-6 w-6" />
+            <ImagePlus className="h-5 w-5 sm:h-6 sm:w-6" />
           </div>
-          <span className="text-xs">Sem arte enviada</span>
+          <span className="text-[10px] sm:text-xs">Sem arte enviada</span>
         </div>
       )}
       <span
@@ -1589,11 +1589,11 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
   const accentColor = client.primary_color || "#E5E7EB";
 
   return (
-    <section className="space-y-6 md:space-y-8">
-      <div className="relative flex flex-col gap-4 overflow-hidden rounded-2xl border border-border bg-background p-4 pr-24 md:flex-row md:items-center md:justify-between md:p-5 md:pr-28">
+    <section className="space-y-4 md:space-y-8">
+      <div className="relative flex flex-col gap-3 overflow-hidden rounded-xl border border-border bg-background p-3 pr-20 md:flex-row md:items-center md:justify-between md:rounded-2xl md:p-5 md:pr-28">
         <span className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: accentColor }} />
-        <div className="absolute right-3 top-3 flex items-center gap-1 md:right-4 md:top-4">
-          <Button asChild variant="ghostSecondary" size="icon" className="h-9 w-9 rounded-full" title="Voltar para clientes">
+        <div className="absolute right-2 top-2 flex items-center gap-1 md:right-4 md:top-4">
+          <Button asChild variant="ghostSecondary" size="icon" className="h-8 w-8 rounded-full md:h-9 md:w-9" title="Voltar para clientes">
             <Link href="/admin/clientes" aria-label="Voltar para clientes">
               <ArrowLeft className="h-4 w-4" />
             </Link>
@@ -1602,7 +1602,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
             type="button"
             variant="ghostSecondary"
             size="icon"
-            className="h-9 w-9 rounded-full"
+            className="h-8 w-8 rounded-full md:h-9 md:w-9"
             onClick={openProfileModal}
             aria-label="Editar perfil"
             title="Editar perfil"
@@ -1616,20 +1616,20 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
             name={client.name}
             logoUrl={client.logo_url}
             accentColor={accentColor}
-            className="h-14 w-14 text-lg md:h-16 md:w-16 md:text-xl"
+            className="h-12 w-12 text-base md:h-16 md:w-16 md:text-xl"
           />
           <div className="min-w-0">
             <div className="flex min-w-0 items-center gap-2">
-              <h1 className="sora-heading mt-1 truncate text-2xl font-medium text-foreground md:text-3xl">{client.name}</h1>
+              <h1 className="sora-heading mt-1 truncate text-xl font-medium text-foreground md:text-3xl">{client.name}</h1>
               <span className="mt-1 flex shrink-0 items-center gap-1.5" aria-label="Cores do cliente">
                 <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: accentColor }} />
                 <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: client.secondary_color || accentColor }} />
               </span>
             </div>
-            <p className="mt-1 truncate text-xs text-muted-foreground md:mt-2 md:text-sm">
+            <p className="mt-0.5 truncate text-[11px] text-muted-foreground md:mt-2 md:text-sm">
               /{client.slug} - criado em {formatDateBR(client.created_at)}
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-0.5 text-[11px] text-muted-foreground md:mt-1 md:text-xs">
               Responsável: <span className="text-foreground">{client.responsible_name || "Sem responsável"}</span>
             </p>
           </div>
@@ -1647,14 +1647,14 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
         onDismiss={() => setError(null)}
       />
 
-      <Tabs defaultValue="planejamentos" className="space-y-5 md:space-y-6">
-        <TabsList className="grid h-auto w-full grid-cols-2 gap-3 border-0 bg-transparent p-0">
+      <Tabs defaultValue="planejamentos" className="space-y-4 md:space-y-6">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-2 border-0 bg-transparent p-0 md:gap-3">
           <TabsTrigger
             value="planejamentos"
-            className="group h-auto justify-start gap-2 rounded-2xl border border-border bg-background p-3 text-left text-muted-foreground shadow-none data-[state=active]:border-neutral-300 data-[state=active]:bg-background data-[state=active]:text-neutral-950 data-[state=active]:shadow-none dark:data-[state=active]:border-white/20 dark:data-[state=active]:bg-background dark:data-[state=active]:text-neutral-100 sm:gap-3 sm:p-4"
+            className="group h-auto justify-start gap-1.5 rounded-xl border border-border bg-background p-2.5 text-left text-muted-foreground shadow-none data-[state=active]:border-neutral-300 data-[state=active]:bg-background data-[state=active]:text-neutral-950 data-[state=active]:shadow-none dark:data-[state=active]:border-white/20 dark:data-[state=active]:bg-background dark:data-[state=active]:text-neutral-100 sm:gap-3 sm:p-4"
           >
-            <span className="grid h-7 w-7 shrink-0 place-items-center text-muted-foreground transition-colors group-hover:text-foreground group-data-[state=active]:text-neutral-950 dark:group-data-[state=active]:text-neutral-100 sm:h-8 sm:w-8">
-              <FileText className="h-5 w-5 sm:h-6 sm:w-6" />
+            <span className="grid h-6 w-6 shrink-0 place-items-center text-muted-foreground transition-colors group-hover:text-foreground group-data-[state=active]:text-neutral-950 dark:group-data-[state=active]:text-neutral-100 sm:h-8 sm:w-8">
+              <FileText className="h-4 w-4 sm:h-6 sm:w-6" />
             </span>
             <span className="flex flex-col items-start">
               <span className="text-sm font-medium leading-none sm:text-base">Planejamentos</span>
@@ -1665,10 +1665,10 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
           </TabsTrigger>
           <TabsTrigger
             value="apresentacoes"
-            className="group h-auto justify-start gap-2 rounded-2xl border border-border bg-background p-3 text-left text-muted-foreground shadow-none data-[state=active]:border-neutral-300 data-[state=active]:bg-background data-[state=active]:text-neutral-950 data-[state=active]:shadow-none dark:data-[state=active]:border-white/20 dark:data-[state=active]:bg-background dark:data-[state=active]:text-neutral-100 sm:gap-3 sm:p-4"
+            className="group h-auto justify-start gap-1.5 rounded-xl border border-border bg-background p-2.5 text-left text-muted-foreground shadow-none data-[state=active]:border-neutral-300 data-[state=active]:bg-background data-[state=active]:text-neutral-950 data-[state=active]:shadow-none dark:data-[state=active]:border-white/20 dark:data-[state=active]:bg-background dark:data-[state=active]:text-neutral-100 sm:gap-3 sm:p-4"
           >
-            <span className="grid h-7 w-7 shrink-0 place-items-center text-muted-foreground transition-colors group-hover:text-foreground group-data-[state=active]:text-neutral-950 dark:group-data-[state=active]:text-neutral-100 sm:h-8 sm:w-8">
-              <ImagePlus className="h-5 w-5 sm:h-6 sm:w-6" />
+            <span className="grid h-6 w-6 shrink-0 place-items-center text-muted-foreground transition-colors group-hover:text-foreground group-data-[state=active]:text-neutral-950 dark:group-data-[state=active]:text-neutral-100 sm:h-8 sm:w-8">
+              <ImagePlus className="h-4 w-4 sm:h-6 sm:w-6" />
             </span>
             <span className="flex flex-col items-start">
               <span className="text-sm font-medium leading-none sm:text-base">Apresentações</span>
@@ -1688,7 +1688,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            <div className="no-scrollbar flex max-w-full flex-nowrap items-center gap-1.5 overflow-x-auto sm:flex-wrap sm:justify-end sm:gap-2">
               <LibraryCreateButton
                 label="Criar novo planejamento"
                 onClick={() => openCreationModal("copy")}
@@ -1838,7 +1838,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
           ) : null}
 
           {filteredCopyPlannings.length ? (
-            <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2.5 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
               {filteredCopyPlannings.map((planning) => {
                 const publicPath = `/p/${planning.public_slug}`;
                 const previewText = extractPreviewText(
@@ -1870,7 +1870,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                       }
                     }}
                     className={cn(
-                      "group relative flex min-h-[318px] cursor-pointer flex-col rounded-2xl border bg-background p-2 transition hover:-translate-y-0.5 hover:border-foreground/25 sm:min-h-[374px] sm:p-3",
+                      "group relative flex min-w-0 cursor-pointer flex-col rounded-xl border bg-background p-2 transition hover:-translate-y-0.5 hover:border-foreground/25 sm:min-h-[374px] sm:rounded-2xl sm:p-3",
                       isSelected
                         ? "border-blue-400 bg-neutral-900/[0.045] dark:border-blue-400/60 dark:bg-white/[0.06]"
                         : "border-border",
@@ -1889,19 +1889,22 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                       preview={previewText}
                       accentColor={isArchived ? "#D4D4D8" : accentColor}
                     />
-                    <div className="flex flex-1 flex-col space-y-2 px-1 pb-1 pt-3 sm:space-y-3 sm:pt-4">
-                      <div className="flex items-start justify-between gap-2">
-                        <h3 className="sora-heading line-clamp-2 text-sm font-medium leading-snug text-foreground sm:text-base">
+                    <div className="flex flex-1 flex-col space-y-1.5 px-0.5 pb-0.5 pt-2 sm:space-y-3 sm:px-1 sm:pb-1 sm:pt-4">
+                      <div className="flex items-start justify-between gap-1.5 sm:gap-2">
+                        <h3 className="sora-heading line-clamp-2 min-w-0 text-xs font-medium leading-snug text-foreground sm:text-base">
                           {planning.title}
                         </h3>
-                        {isArchived ? <InfoTag>Arquivado</InfoTag> : null}
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          {planningMonthTag ? <InfoTag>{planningMonthTag}</InfoTag> : null}
+                          {isArchived ? <InfoTag>Arquivado</InfoTag> : null}
+                        </div>
                       </div>
-                      <div className="space-y-1 text-[11px] text-muted-foreground sm:text-xs">
-                        <p>{planning.period_label || "Periodo nao definido"}</p>
+                      <div className="space-y-0.5 text-[10px] leading-snug text-muted-foreground sm:space-y-1 sm:text-xs">
+                        <p className="line-clamp-2">{planning.period_label || "Periodo nao definido"}</p>
                         <p className="hidden sm:block">Criado em {formatDateBR(planning.created_at)}</p>
                       </div>
-                      <div className="mt-auto flex flex-wrap items-center justify-between gap-1 pt-1 sm:gap-1.5">
-                        <div className="flex min-w-0 items-center gap-1.5">
+                      <div className="mt-auto flex items-center justify-between gap-1 pt-1 sm:gap-1.5">
+                        <div className="flex min-w-0 items-center gap-0.5 sm:gap-1.5">
                           <Button
                             type="button"
 	                            variant="ghostSecondary"
@@ -1934,7 +1937,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
 	                            </Link>
 	                          </Button>
                         </div>
-                        <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
+                        <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1.5">
                           <Button
                             type="button"
                             variant="ghostSecondary"
@@ -1966,7 +1969,6 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
 	                          >
 	                            <Trash2 className="h-3.5 w-3.5" />
 	                          </Button>
-	                          {planningMonthTag ? <InfoTag>{planningMonthTag}</InfoTag> : null}
                         </div>
                       </div>
                     </div>
@@ -2008,41 +2010,11 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 md:justify-end">
+            <div className="no-scrollbar flex max-w-full flex-nowrap items-center gap-1.5 overflow-x-auto md:flex-wrap md:justify-end md:gap-2">
               <LibraryCreateButton
                 label="Criar nova apresentacao"
                 onClick={() => openCreationModal("visual")}
               />
-
-              <div className="order-last flex w-full justify-start pt-1 md:order-none md:ml-2 md:w-auto md:pt-0">
-                <div className="relative grid h-10 w-full max-w-[390px] grid-cols-4 rounded-lg border border-border bg-background p-1 md:w-[390px]">
-                  <span
-                    className="absolute bottom-1 left-1 top-1 rounded-md bg-neutral-200/80 transition-transform duration-200 ease-out dark:bg-white/[0.08]"
-                    style={{
-                      width: "calc((100% - 0.5rem) / 4)",
-                      transform: `translateX(${activePresentationTypeTabIndex * 100}%)`,
-                    }}
-                    aria-hidden="true"
-                  />
-                  {presentationTypeTabs.map((tab) => {
-                    const isActive = presentationType === tab.value;
-
-                    return (
-                      <button
-                        key={tab.value}
-                        type="button"
-                        onClick={() => setPresentationType(tab.value)}
-                        className={cn(
-                          "relative z-10 h-8 rounded-md px-2 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground sm:text-[11px]",
-                          isActive && "text-foreground dark:text-foreground",
-                        )}
-                      >
-                        {tab.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
 
               <Button
                 type="button"
@@ -2134,6 +2106,36 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
             </div>
           </div>
 
+          <div className="no-scrollbar w-full max-w-full overflow-x-auto pb-1">
+            <div className="relative grid h-9 min-w-[288px] max-w-full grid-cols-4 rounded-lg border border-border bg-background p-1 sm:w-[390px] md:h-10">
+              <span
+                className="absolute bottom-1 left-1 top-1 rounded-md bg-neutral-200/80 transition-transform duration-200 ease-out dark:bg-white/[0.08]"
+                style={{
+                  width: "calc((100% - 0.5rem) / 4)",
+                  transform: `translateX(${activePresentationTypeTabIndex * 100}%)`,
+                }}
+                aria-hidden="true"
+              />
+              {presentationTypeTabs.map((tab) => {
+                const isActive = presentationType === tab.value;
+
+                return (
+                  <button
+                    key={tab.value}
+                    type="button"
+                    onClick={() => setPresentationType(tab.value)}
+                    className={cn(
+                      "relative z-10 h-7 rounded-md px-1.5 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground sm:h-8 sm:px-2 sm:text-[11px]",
+                      isActive && "text-foreground dark:text-foreground",
+                    )}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {presentationSelectionMode ? (
             <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
               <span className="mr-auto font-medium text-foreground">
@@ -2190,7 +2192,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
           ) : null}
 
           {filteredVisualPresentations.length ? (
-            <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-2 2xl:grid-cols-3">
+            <div className="grid grid-cols-2 gap-2.5 sm:gap-5 lg:grid-cols-2 2xl:grid-cols-3">
               {filteredVisualPresentations.map((presentation) => {
                 const publicPath = `/a/${presentation.public_slug}`;
                 const presentationMonthName = monthNameFromDayMonth(presentation.start_display_date);
@@ -2220,7 +2222,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                       }
                     }}
                     className={cn(
-                      "group relative cursor-pointer rounded-2xl border bg-background p-2 transition hover:-translate-y-0.5 hover:border-foreground/25 sm:p-4",
+                      "group relative min-w-0 cursor-pointer rounded-xl border bg-background p-2 transition hover:-translate-y-0.5 hover:border-foreground/25 sm:rounded-2xl sm:p-4",
                       isSelected
                         ? "border-blue-400 bg-neutral-900/[0.045] dark:border-blue-400/60 dark:bg-white/[0.06]"
                         : "border-border",
@@ -2240,22 +2242,23 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                       imageUrl={visualThumbnails[presentation.id]}
                       detailColor={detailColor}
                     />
-                    <div className="space-y-2 px-1 pb-1 pt-3 sm:space-y-3 sm:pt-4">
-	                      <div className="flex items-start justify-between gap-2">
-	                        <div className="flex min-w-0 flex-1 flex-wrap items-start gap-1.5 sm:gap-2">
-	                          <h3 className="sora-heading line-clamp-2 text-sm font-medium leading-snug text-foreground sm:text-base">
+                    <div className="space-y-1.5 px-0.5 pb-0.5 pt-2 sm:space-y-3 sm:px-1 sm:pb-1 sm:pt-4">
+	                      <div className="flex items-start justify-between gap-1.5 sm:gap-2">
+	                        <div className="flex min-w-0 flex-1 flex-wrap items-start gap-1 sm:gap-2">
+	                          <h3 className="sora-heading line-clamp-2 min-w-0 text-xs font-medium leading-snug text-foreground sm:text-base">
 	                            {presentation.title}
 	                          </h3>
 	                          {presentationMonthName ? <PresentationMonthTag>{presentationMonthName}</PresentationMonthTag> : null}
+                            <InfoTag>{presentationTypeTag}</InfoTag>
 	                        </div>
 	                        {isArchived ? <InfoTag>Arquivada</InfoTag> : null}
 	                      </div>
-                      <div className="space-y-1 text-[11px] text-muted-foreground sm:text-xs">
-                        <p>{presentation.period_label || "Periodo nao definido"}</p>
+                      <div className="space-y-0.5 text-[10px] leading-snug text-muted-foreground sm:space-y-1 sm:text-xs">
+                        <p className="line-clamp-2">{presentation.period_label || "Periodo nao definido"}</p>
                         <p className="hidden sm:block">Criada em {formatDateBR(presentation.created_at)}</p>
                       </div>
-                      <div className="flex flex-wrap items-center gap-1 pt-1 sm:flex-nowrap sm:gap-2">
-                        <div className="flex min-w-0 flex-wrap items-center gap-1 sm:gap-1.5">
+                      <div className="flex items-center gap-1 pt-1 sm:gap-2">
+                        <div className="flex min-w-0 items-center gap-0.5 sm:gap-1.5">
                           <Button
                             type="button"
 	                            variant="ghostSecondary"
@@ -2288,7 +2291,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
 	                            </Link>
 	                          </Button>
                         </div>
-                        <div className="ml-auto flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-1 pl-1 sm:gap-1.5 sm:pl-3">
+                        <div className="ml-auto flex min-w-0 shrink-0 items-center justify-end gap-0.5 pl-1 sm:gap-1.5 sm:pl-3">
                           <Button
                             type="button"
                             variant="ghostSecondary"
@@ -2320,7 +2323,6 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
 	                          >
 	                            <Trash2 className="h-3.5 w-3.5" />
 	                          </Button>
-	                          <InfoTag>{presentationTypeTag}</InfoTag>
                         </div>
                       </div>
                     </div>

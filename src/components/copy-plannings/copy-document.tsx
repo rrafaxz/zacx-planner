@@ -3310,7 +3310,7 @@ function Toolbar({ editor, theme, className, onImageUpload }: ToolbarProps) {
   const mobileGroupButtonClass =
     "inline-flex h-9 shrink-0 items-center rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground transition hover:bg-secondary md:hidden";
   const mobilePopoverClass =
-    "absolute top-10 z-40 grid min-w-40 gap-1 border border-border bg-background p-1.5 text-xs shadow-sm";
+    "fixed left-3 right-3 top-[calc(3.5rem+var(--planning-sticky-header-height)+var(--planning-toolbar-height))] z-[120] grid gap-1 border border-border bg-background p-1.5 text-xs shadow-sm md:absolute md:left-auto md:right-auto md:top-10 md:min-w-40";
   const mobilePopoverButtonClass =
     "flex h-8 w-full items-center gap-2 px-2 text-left text-xs text-foreground transition hover:bg-secondary disabled:opacity-45";
 
@@ -3357,7 +3357,7 @@ function Toolbar({ editor, theme, className, onImageUpload }: ToolbarProps) {
   return (
     <div
       className={cn(
-        "sticky top-3 z-20 mb-4 flex flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-visible rounded-2xl border border-black/10 bg-background p-2 shadow-sm dark:border-white/10 md:flex-wrap md:gap-2 md:overflow-visible",
+        "sticky top-3 z-20 mb-4 flex min-h-12 w-full max-w-full min-w-0 flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-hidden overscroll-x-contain rounded-xl border border-black/10 bg-background p-2 shadow-sm dark:border-white/10 md:flex-wrap md:gap-2 md:overflow-visible md:rounded-2xl",
         className,
       )}
       style={{ ["--zacx-accent" as string]: theme === "light" ? lightAccent : darkAccent }}
@@ -3516,7 +3516,7 @@ function Toolbar({ editor, theme, className, onImageUpload }: ToolbarProps) {
           Inserir
         </button>
         {mobileInsertOpen ? (
-          <div className={cn(mobilePopoverClass, "left-0")}>
+          <div className={cn(mobilePopoverClass, "md:left-0")}>
             <button
               type="button"
               className={mobilePopoverButtonClass}
@@ -3581,7 +3581,7 @@ function Toolbar({ editor, theme, className, onImageUpload }: ToolbarProps) {
           Cores
         </button>
         {mobileColorOpen ? (
-          <div className={cn(mobilePopoverClass, "right-0 grid-cols-4")}>
+          <div className={cn(mobilePopoverClass, "grid-cols-4 md:right-0")}>
             {colors.map((color) => (
               <button
                 key={color.label}
@@ -3619,7 +3619,7 @@ function Toolbar({ editor, theme, className, onImageUpload }: ToolbarProps) {
           Mais
         </button>
         {mobileMoreOpen ? (
-          <div className={cn(mobilePopoverClass, "right-0")}>
+          <div className={cn(mobilePopoverClass, "md:right-0")}>
             {[
               { label: "Desfazer", icon: Undo2, disabled: !canUndo, action: (readyEditor: Editor) => readyEditor.chain().focus().undo().run() },
               { label: "Refazer", icon: Redo2, disabled: !canRedo, action: (readyEditor: Editor) => readyEditor.chain().focus().redo().run() },
@@ -3800,7 +3800,7 @@ export function CopyDocument({
   );
 
   return (
-    <div className={cn("w-full", !workspaceLayout && "mx-auto max-w-6xl")}>
+    <div className={cn("w-full min-w-0 max-w-full", !workspaceLayout && "mx-auto max-w-6xl")}>
       {editable ? (
         <Toolbar
           editor={activeEditor}
@@ -3811,7 +3811,7 @@ export function CopyDocument({
       ) : null}
 
       {workspaceLayout ? (
-        <div className="grid gap-4 px-4 py-4 md:px-5 lg:grid-cols-[210px_minmax(0,860px)_minmax(0,1fr)] lg:items-start lg:justify-start lg:gap-6 2xl:grid-cols-[220px_minmax(760px,900px)_minmax(220px,1fr)]">
+        <div className="grid w-full max-w-full min-w-0 gap-3 px-0 py-3 sm:px-2 md:px-5 md:py-4 lg:grid-cols-[210px_minmax(0,860px)_minmax(0,1fr)] lg:items-start lg:justify-start lg:gap-6 2xl:grid-cols-[220px_minmax(760px,900px)_minmax(220px,1fr)]">
           {sectionNavigation ? (
             <div className={cn("lg:sticky lg:top-[148px] lg:self-start", sectionNavigationClassName)}>
               {sectionNavigation}
@@ -3819,7 +3819,7 @@ export function CopyDocument({
           ) : (
             <div className="hidden lg:block" />
           )}
-          <div className="min-w-0">{renderedSections}</div>
+          <div className="min-w-0 max-w-full">{renderedSections}</div>
           <div className="hidden lg:block" aria-hidden="true" />
         </div>
       ) : (
@@ -4715,7 +4715,10 @@ export function CopyDocument({
 
         @media (max-width: 767px) {
           .copy-document-editor {
+            width: 100%;
             max-width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
             overflow-x: hidden;
             padding: 1.25rem 1rem 1.5rem !important;
           }
@@ -4734,13 +4737,56 @@ export function CopyDocument({
           }
 
           .tiptap-copy-editor {
+            width: 100%;
             max-width: 100%;
+            min-width: 0;
             overflow-x: hidden;
           }
 
           .tiptap-copy-editor .ProseMirror {
             min-height: 58vh;
+            max-width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
             overflow-x: hidden;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            white-space: normal;
+          }
+
+          .tiptap-copy-editor .ProseMirror *,
+          .tiptap-copy-editor .ProseMirror *::before,
+          .tiptap-copy-editor .ProseMirror *::after {
+            box-sizing: border-box;
+          }
+
+          .tiptap-copy-editor .ProseMirror p,
+          .tiptap-copy-editor .ProseMirror li,
+          .tiptap-copy-editor .ProseMirror blockquote {
+            font-size: 14px;
+            line-height: 1.62;
+          }
+
+          .tiptap-copy-editor .ProseMirror h1 {
+            font-size: 22px;
+            line-height: 1.18;
+          }
+
+          .tiptap-copy-editor .ProseMirror h2 {
+            font-size: 19px;
+            line-height: 1.22;
+          }
+
+          .tiptap-copy-editor .ProseMirror h3 {
+            font-size: 17px;
+            line-height: 1.26;
+          }
+
+          .tiptap-copy-editor .ProseMirror img,
+          .tiptap-copy-editor .ProseMirror .planning-doc-image,
+          .tiptap-copy-editor .ProseMirror .planning-doc-image-frame,
+          .tiptap-copy-editor .ProseMirror .planning-doc-image-node {
+            max-width: 100%;
           }
 
           .tiptap-copy-editor .ProseMirror table,
@@ -4751,7 +4797,9 @@ export function CopyDocument({
           }
 
           .tiptap-copy-editor .ProseMirror .planning-doc-box,
+          .tiptap-copy-editor .ProseMirror .planning-doc-box-node,
           .tiptap-copy-editor .ProseMirror .planning-doc-note,
+          .tiptap-copy-editor .ProseMirror .planning-doc-shape-node,
           .tiptap-copy-editor .ProseMirror .planning-doc-image-wrapper {
             max-width: 100%;
           }

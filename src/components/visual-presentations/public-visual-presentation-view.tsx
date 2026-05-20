@@ -110,7 +110,7 @@ function PresentationItemHeader({
   weekdayTextColor: string;
 }) {
   const blockClass =
-    "flex h-12 min-w-0 items-center justify-center rounded-lg px-2 text-center text-[11px] font-medium uppercase leading-tight tracking-normal sm:h-14 sm:px-3 sm:text-sm md:text-base";
+    "flex h-10 min-w-0 items-center justify-center rounded-md px-2 text-center text-[11px] font-medium uppercase leading-tight tracking-normal sm:h-14 sm:rounded-lg sm:px-3 sm:text-sm md:text-base";
   const [dateDay, dateMonth] = (displayDate || "--/--").split("/");
 
   return (
@@ -164,7 +164,7 @@ function PublicVisualItemSection({
   const weekday = isStories ? activeImage?.weekday || firstItem?.weekday : firstItem?.weekday;
 
   return (
-    <section key={groupKey} className="space-y-5 md:space-y-10">
+    <section key={groupKey} className="space-y-3 md:space-y-10">
       <PresentationItemHeader
         displayDate={displayDate}
         weekday={weekday}
@@ -196,7 +196,7 @@ function PublicWeekSelection({
   onSelectWeek: (weekId: string) => void;
 }) {
   return (
-    <section className="no-scrollbar mt-5 flex gap-3 overflow-x-auto pb-1 sm:grid sm:grid-cols-2 sm:overflow-visible sm:pb-0 lg:grid-cols-4">
+    <section className="no-scrollbar mt-4 flex max-w-full snap-x snap-mandatory gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-2 sm:overflow-visible sm:pb-0 lg:grid-cols-4">
       {weeks.map((week) => {
         const itemCount = filterVisualItemsForWeek(items, week).length;
 
@@ -206,15 +206,15 @@ function PublicWeekSelection({
             type="button"
             onClick={() => onSelectWeek(week.id)}
             className={cn(
-              "min-w-[156px] flex-none rounded-xl border border-dashed bg-background px-3 py-4 text-left transition-colors hover:border-foreground/35 hover:bg-foreground/[0.02] sm:min-w-0 sm:px-4 sm:py-5",
+              "min-w-[138px] flex-none snap-start rounded-lg border border-dashed bg-background px-3 py-3.5 text-left transition-colors hover:border-foreground/35 hover:bg-foreground/[0.02] sm:min-w-0 sm:rounded-xl sm:px-4 sm:py-5",
               selectedWeekId === week.id
                 ? "border-[#1D10D7] bg-neutral-900/[0.045] dark:border-[#DFFF06] dark:bg-[#DFFF06]/[0.07]"
                 : "border-border",
             )}
           >
-            <span className="sora-heading block text-sm font-semibold uppercase text-foreground">{week.actionLabel}</span>
+            <span className="sora-heading block text-xs font-semibold uppercase text-foreground sm:text-sm">{week.actionLabel}</span>
             <span className="mt-1 block text-[11px] text-muted-foreground sm:text-xs">{week.periodLabel}</span>
-            <span className="mt-3 inline-flex rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground">
+            <span className="mt-2 inline-flex rounded-md border border-border px-2 py-0.5 text-[10px] text-muted-foreground sm:mt-3 sm:rounded-full sm:px-2.5 sm:py-1 sm:text-[11px]">
               {itemCount} {itemCount === 1 ? "item" : "itens"}
             </span>
           </button>
@@ -381,9 +381,9 @@ export function PublicVisualPresentationView({ slug }: PublicVisualPresentationV
           />
         ) : null}
 
-        <section className="mt-5 md:mt-6">
+        <section className="mt-4 md:mt-6">
           {shouldShowWeekSelection && selectedWeek ? (
-            <div className="mb-5">
+            <div className="mb-4 md:mb-5">
               <div>
                 <h2 className="sora-heading text-base font-semibold text-foreground">{selectedWeek.label}</h2>
                 <p className="text-xs text-muted-foreground">{selectedWeek.periodLabel}</p>
@@ -392,7 +392,7 @@ export function PublicVisualPresentationView({ slug }: PublicVisualPresentationV
           ) : null}
 
           {visibleItems.length ? (
-            <div className="space-y-10 md:space-y-24">
+            <div className="space-y-6 md:space-y-24">
               {groupVisualItems(visibleItems).map((group) => {
                 return (
                   <PublicVisualItemSection

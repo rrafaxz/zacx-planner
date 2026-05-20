@@ -757,15 +757,15 @@ export function ClientsManager() {
         onDismiss={() => setError(null)}
       />
 
-      <div className="grid gap-4 lg:grid-cols-[150px_minmax(0,1fr)] lg:items-start">
-        <aside className="no-scrollbar flex gap-2 overflow-x-auto pb-1 lg:sticky lg:top-24 lg:flex-col lg:overflow-visible lg:pb-0 lg:pr-2">
+      <div className="space-y-4">
+        <div className="no-scrollbar flex max-w-full flex-nowrap items-center gap-2 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible md:pb-0">
           <button
             type="button"
             onClick={() => setResponsibleFilter("all")}
             className={cn(
-              "h-10 shrink-0 rounded-md border border-border bg-background px-4 text-sm font-medium text-muted-foreground transition-colors hover:border-foreground/25 hover:text-foreground lg:w-full lg:text-left",
+              "h-9 shrink-0 rounded-md border border-border bg-secondary/45 px-3 text-xs font-medium text-muted-foreground transition-colors hover:border-neutral-300 hover:bg-secondary hover:text-foreground sm:h-10 sm:px-4 sm:text-sm",
               responsibleFilter === "all" &&
-                "border-[#1D10D7]/60 bg-[#1D10D7]/[0.04] text-foreground dark:border-[#DFFF06]/70 dark:bg-[#DFFF06]/[0.08]",
+                "border-neutral-300 bg-neutral-200/70 text-foreground dark:border-white/15 dark:bg-white/[0.10] dark:text-foreground",
             )}
           >
             Todos
@@ -776,15 +776,15 @@ export function ClientsManager() {
               type="button"
               onClick={() => setResponsibleFilter(responsible)}
               className={cn(
-                "h-10 shrink-0 rounded-md border border-border bg-background px-4 text-sm font-medium text-muted-foreground transition-colors hover:border-foreground/25 hover:text-foreground lg:w-full lg:text-left",
+                "h-9 shrink-0 rounded-md border border-border bg-secondary/45 px-3 text-xs font-medium text-muted-foreground transition-colors hover:border-neutral-300 hover:bg-secondary hover:text-foreground sm:h-10 sm:px-4 sm:text-sm",
                 responsibleFilter === responsible &&
-                  "border-[#1D10D7]/60 bg-[#1D10D7]/[0.04] text-foreground dark:border-[#DFFF06]/70 dark:bg-[#DFFF06]/[0.08]",
+                  "border-neutral-300 bg-neutral-200/70 text-foreground dark:border-white/15 dark:bg-white/[0.10] dark:text-foreground",
               )}
             >
               {responsible}
             </button>
           ))}
-        </aside>
+        </div>
 
         <div className="min-w-0 space-y-4">
           {clientSelectionMode ? (
@@ -844,7 +844,7 @@ export function ClientsManager() {
               </CardContent>
             </Card>
           ) : filteredClients.length ? (
-            <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
               {filteredClients.map((client) => (
                 <ClientCard
                   key={client.id}

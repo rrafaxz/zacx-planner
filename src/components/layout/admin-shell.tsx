@@ -334,11 +334,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
       <main
         className={cn(
-          "px-4 py-6 transition-all duration-300 md:px-8 md:py-8",
+          "min-w-0 overflow-x-clip px-3 py-4 transition-all duration-300 sm:px-4 sm:py-6 md:px-8 md:py-8",
           isCollapsed ? "md:ml-20" : "md:ml-72",
         )}
       >
-        <div className="mx-auto w-full max-w-6xl">{children}</div>
+        <div className="mx-auto w-full max-w-6xl min-w-0">{children}</div>
       </main>
     </div>
   );

@@ -31,13 +31,13 @@ export function ClientCard({
         selected && "border-blue-400 bg-neutral-900/[0.045] dark:border-blue-400/60 dark:bg-white/[0.06]",
       )}
     >
-      <CardContent className="relative flex min-h-[76px] items-center gap-3 p-3 sm:min-h-[92px] sm:p-4">
+      <CardContent className="relative flex min-h-[130px] flex-col items-center justify-center gap-2 p-3 text-center sm:min-h-[92px] sm:flex-row sm:justify-start sm:gap-3 sm:p-4 sm:text-left">
         <span
           className="absolute inset-x-0 top-0 h-1"
           style={{ backgroundColor: isArchived ? "hsl(var(--border))" : accentColor }}
         />
         {selectionMode ? (
-          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-border bg-background text-foreground">
+          <span className="absolute left-2 top-2 grid h-7 w-7 shrink-0 place-items-center rounded-md border border-border bg-background text-foreground sm:static">
             {selected ? <CheckSquare2 className="h-4 w-4" /> : <Square className="h-4 w-4" />}
           </span>
         ) : null}
@@ -50,21 +50,27 @@ export function ClientCard({
             <FileText className="h-4 w-4" />
           </span>
         ) : null}
-        <div
-          className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-full border border-border bg-background text-base font-medium transition group-hover:scale-[1.03] sm:h-12 sm:w-12 sm:text-lg"
-          style={{ color: accentColor }}
-        >
-          {client.logo_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={client.logo_url} alt="" className="h-full w-full object-cover" />
-          ) : (
-            client.name.slice(0, 1).toUpperCase()
-          )}
+        <div className="order-2 flex items-center justify-center gap-2 sm:order-none">
+          <div
+            className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full border border-border bg-background text-base font-medium transition group-hover:scale-[1.03] sm:h-12 sm:w-12 sm:text-lg"
+            style={{ color: accentColor }}
+          >
+            {client.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={client.logo_url} alt="" className="h-full w-full object-cover" />
+            ) : (
+              client.name.slice(0, 1).toUpperCase()
+            )}
+          </div>
+          <div className={cn("flex items-center gap-1.5 sm:hidden", isArchived && "opacity-45 grayscale")}>
+            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: accentColor }} />
+            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: secondaryColor }} />
+          </div>
         </div>
 
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-2">
-            <h2 className="sora-heading line-clamp-2 text-sm font-medium leading-snug text-foreground sm:text-base">
+        <div className="order-1 min-w-0 flex-1 sm:order-none">
+          <div className="flex min-w-0 flex-wrap items-center justify-center gap-1.5 sm:justify-start sm:gap-2">
+            <h2 className="sora-heading w-full min-w-0 max-w-full text-sm font-medium leading-snug text-foreground [overflow-wrap:anywhere] sm:line-clamp-2 sm:w-auto sm:text-base">
               {client.name}
             </h2>
             {isArchived ? (
@@ -73,14 +79,19 @@ export function ClientCard({
               </span>
             ) : null}
           </div>
-          <div className={cn("mt-2 flex items-center gap-1.5", isArchived && "opacity-45 grayscale")}>
+          <div className={cn("mt-2 hidden items-center gap-1.5 sm:flex", isArchived && "opacity-45 grayscale")}>
             <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: accentColor }} />
             <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: secondaryColor }} />
           </div>
           {client.responsible_name ? (
-            <p className="mt-1 text-[11px] text-muted-foreground">Responsável: {client.responsible_name}</p>
+            <p className="mt-1 hidden text-[11px] text-muted-foreground sm:block">Responsável: {client.responsible_name}</p>
           ) : null}
         </div>
+        {client.responsible_name ? (
+          <p className="order-3 max-w-full text-center text-[11px] text-muted-foreground [overflow-wrap:anywhere] sm:hidden">
+            Responsável: {client.responsible_name}
+          </p>
+        ) : null}
       </CardContent>
     </Card>
   );

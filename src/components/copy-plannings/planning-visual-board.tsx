@@ -423,7 +423,7 @@ export function PlanningVisualBoard({
 
   return (
     <div className={className}>
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
         {items.map((item) => {
           const colors = typeVisualColors(item.type, accentColor, secondaryAccentColor, isLight);
           const weekday = displayWeekday(item);
@@ -441,25 +441,25 @@ export function PlanningVisualBoard({
               key={item.id}
               type="button"
               onClick={() => setSelectedItem(item)}
-              className="group flex aspect-[1.04/1] min-h-[156px] flex-col overflow-hidden rounded-2xl border border-neutral-900 bg-background text-center shadow-none transition hover:-translate-y-0.5 hover:border-black hover:bg-secondary/20 dark:border-white/30 dark:hover:border-white/40 sm:min-h-[220px]"
+              className="group flex aspect-[1.04/1] min-h-[132px] flex-col overflow-hidden rounded-xl border border-neutral-900 bg-background text-center shadow-none transition hover:-translate-y-0.5 hover:border-black hover:bg-secondary/20 dark:border-white/30 dark:hover:border-white/40 sm:min-h-[220px] sm:rounded-2xl"
               style={{ fontFamily: "var(--font-sora), Sora, var(--font-poppins), Poppins, sans-serif" }}
             >
               <div
-                className="flex min-h-11 items-center justify-center border-b border-neutral-900 px-2 py-2 text-xs font-semibold uppercase tracking-normal dark:border-white/30 sm:min-h-14 sm:px-4 sm:py-3 sm:text-sm md:text-base"
+                className="flex min-h-9 items-center justify-center border-b border-neutral-900 px-1.5 py-1.5 text-[10px] font-semibold uppercase tracking-normal dark:border-white/30 sm:min-h-14 sm:px-4 sm:py-3 sm:text-sm md:text-base"
                 style={{ backgroundColor: colors.surface, color: colors.text }}
               >
                 <span>{weekday ? `${weekday} | ${displayDate}` : displayDate}</span>
               </div>
-              <div className="flex flex-1 flex-col justify-center p-3 sm:p-5 md:p-6">
+              <div className="flex flex-1 flex-col justify-center p-2.5 sm:p-5 md:p-6">
                 <div className="grid place-items-center">
                   <span
-                    className="sora-heading text-center text-lg font-semibold tracking-normal sm:text-2xl md:text-[1.7rem]"
+                    className="sora-heading text-center text-sm font-semibold tracking-normal sm:text-2xl md:text-[1.7rem]"
                     style={{ color: typeTextColor }}
                   >
                     {item.typeLabel}
                   </span>
                 </div>
-                <p className="mt-2 line-clamp-3 text-center text-xs font-medium leading-5 text-foreground sm:mt-4 sm:text-sm sm:leading-6 md:text-base">
+                <p className="mt-1.5 line-clamp-3 text-center text-[11px] font-medium leading-4 text-foreground sm:mt-4 sm:text-sm sm:leading-6 md:text-base">
                   {cardTitle || "Tema não informado"}
                 </p>
               </div>

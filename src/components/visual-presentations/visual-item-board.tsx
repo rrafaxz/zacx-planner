@@ -662,12 +662,12 @@ function AdminVisualItemCard({
   }
 
   return (
-    <Card className="overflow-hidden border-border bg-background">
-      <CardContent className="space-y-4 p-4">
-        <div className="flex items-start justify-between gap-3">
+    <Card className="overflow-hidden rounded-xl border-border bg-background sm:rounded-2xl">
+      <CardContent className="space-y-3 p-3 sm:space-y-4 sm:p-4">
+        <div className="flex items-start justify-between gap-2 sm:gap-3">
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="sora-heading rounded-md border border-border bg-secondary px-2.5 py-1 text-xs font-medium uppercase text-foreground">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <span className="sora-heading rounded-md border border-border bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase text-foreground sm:px-2.5 sm:py-1 sm:text-xs">
                 {formatLabel(mode)}
               </span>
               {onQuickUpdate ? (
@@ -678,14 +678,14 @@ function AdminVisualItemCard({
                     maxLength={5}
                     onChange={(event) => setQuickDate(formatDateInput(event.target.value))}
                     onBlur={commitQuickDate}
-                    className="h-8 w-[72px] rounded-md border border-border bg-background px-2 text-center text-xs font-semibold text-foreground outline-none transition-colors focus:border-foreground/40"
+                    className="h-7 w-[62px] rounded-md border border-border bg-background px-1.5 text-center text-[11px] font-semibold text-foreground outline-none transition-colors focus:border-foreground/40 sm:h-8 sm:w-[72px] sm:px-2 sm:text-xs"
                     aria-label="Editar data"
                     title="Editar data"
                   />
                   <select
                     value={quickWeekday}
                     onChange={(event) => commitQuickWeekday(event.target.value)}
-                    className="h-8 rounded-md border border-border bg-background px-2 text-xs font-semibold uppercase text-foreground outline-none transition-colors focus:border-foreground/40"
+                    className="h-7 rounded-md border border-border bg-background px-1.5 text-[11px] font-semibold uppercase text-foreground outline-none transition-colors focus:border-foreground/40 sm:h-8 sm:px-2 sm:text-xs"
                     aria-label="Editar dia da semana"
                     title="Editar dia da semana"
                   >
@@ -698,30 +698,30 @@ function AdminVisualItemCard({
                 </>
               ) : (
                 <>
-                  <span className="rounded-md border border-border bg-background px-2.5 py-1 text-xs font-semibold text-foreground">
+                  <span className="rounded-md border border-border bg-background px-2 py-0.5 text-[11px] font-semibold text-foreground sm:px-2.5 sm:py-1 sm:text-xs">
                     {headerImage?.display_date || firstItem.display_date || "--/--"}
                   </span>
-                  <span className="text-xs uppercase text-muted-foreground">
+                  <span className="text-[11px] uppercase text-muted-foreground sm:text-xs">
                     {headerImage?.weekday || firstItem.weekday || "--"}
                   </span>
                 </>
               )}
-              <span className="text-xs text-muted-foreground">
+              <span className="text-[11px] text-muted-foreground sm:text-xs">
                 {images.length} {images.length === 1 ? "imagem" : "imagens"}
               </span>
             </div>
             {mode === "stories" && images.length > 1 ? (
-              <p className="mt-2 text-[11px] text-muted-foreground">
+              <p className="mt-1.5 text-[10px] text-muted-foreground sm:mt-2 sm:text-[11px]">
                 Editando a data do Story {activeAdminImageIndex + 1}/{images.length}
               </p>
             ) : null}
           </div>
-          <div className="flex shrink-0 gap-1">
+          <div className="flex shrink-0 gap-0.5 sm:gap-1">
             {showDragHandle ? (
               <span
                 {...dragHandleProps}
                 className={cn(
-                  "grid h-8 w-8 cursor-grab place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground active:cursor-grabbing",
+                  "grid h-7 w-7 cursor-grab place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground active:cursor-grabbing sm:h-8 sm:w-8",
                   dragHandleProps?.className,
                 )}
                 aria-hidden={dragHandleProps?.["aria-label"] ? undefined : true}
@@ -735,7 +735,7 @@ function AdminVisualItemCard({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                className="h-7 w-7 text-muted-foreground hover:text-foreground sm:h-8 sm:w-8"
                 onClick={() => onEdit(firstItem)}
                 aria-label="Editar publicacao"
                 title="Editar publicacao"
@@ -748,7 +748,7 @@ function AdminVisualItemCard({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-rose-400"
+                className="h-7 w-7 text-muted-foreground hover:text-rose-400 sm:h-8 sm:w-8"
                 onClick={() => onDelete(firstItem)}
                 disabled={deletingItemId === firstItem.id}
                 aria-label="Excluir publicacao"
@@ -760,7 +760,7 @@ function AdminVisualItemCard({
           </div>
         </div>
 
-        <div className="border-t border-border/70 pt-4">
+        <div className="border-t border-border/70 pt-3 sm:pt-4">
           <AdminArtwork
             images={images}
             mode={mode}
