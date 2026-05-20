@@ -1901,7 +1901,7 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
   }
 
   async function deleteItemsForWeek(week: VisualPresentationWeek) {
-    const weekItems = filterVisualItemsForWeek(items, week);
+    const weekItems = filterVisualItemsForWeek(items, week, { filterStoryImages: true });
     const itemIdsToDelete: string[] = [];
     const imageIdsToDelete: string[] = [];
     const storagePaths: string[] = [];

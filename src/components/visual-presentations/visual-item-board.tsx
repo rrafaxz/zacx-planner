@@ -198,12 +198,20 @@ function modeFromItem(item: VisualItem) {
   return "post";
 }
 
+function sortVisualItemImages(images?: VisualItemImage[]) {
+  return [...(images ?? [])].sort(
+    (left, right) =>
+      (left.order_index ?? 0) - (right.order_index ?? 0) ||
+      `${left.created_at ?? ""}`.localeCompare(`${right.created_at ?? ""}`),
+  );
+}
+
 function imagesFromItems(items: VisualItemWithImages[]) {
   return items.flatMap((item) => {
     const mode = modeFromItem(item);
 
     if (item.images?.length) {
-      const normalizedImages = item.images
+      const normalizedImages = sortVisualItemImages(item.images)
         .map((image, index) => {
           const normalizedSource = normalizeImageSource(image);
           const metadata =

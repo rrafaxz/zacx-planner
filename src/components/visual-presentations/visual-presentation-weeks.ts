@@ -463,6 +463,7 @@ export function applyAutomaticVisualPresentationRange(
 export function filterVisualItemsForWeek(
   items: VisualItemWithImages[],
   week: VisualPresentationWeek | null | undefined,
+  options: { filterStoryImages?: boolean } = {},
 ) {
   if (!week) return items;
 
@@ -487,23 +488,23 @@ export function filterVisualItemsForWeek(
       return isInWeek || isFallback ? [item] : [];
     }
 
-    const datedImages = images.filter((image, index) => {
+    const weekImages = images.filter((image, index) => {
       const displayDate = imageDate(item, index, image.id, image.order_index);
 
-      return isValidDayMonth(formatDateInput(displayDate || ""));
+      return (
+        isValidDayMonth(formatDateInput(displayDate || "")) &&
+        isDayMonthInVisualWeek(displayDate, week)
+      );
     });
+    const hasDatedImageInWeek = weekImages.length > 0;
 
-    if (!datedImages.length) {
+    if (!hasDatedImageInWeek) {
       const isInWeek = isDayMonthInVisualWeek(item.display_date, week);
       const isFallback = week.index === 0;
 
       return isInWeek || isFallback ? [{ ...item, images }] : [];
     }
 
-    const weekImages = images.filter((image, index) =>
-      isDayMonthInVisualWeek(imageDate(item, index, image.id, image.order_index), week),
-    );
-
-    return weekImages.length ? [{ ...item, images: weekImages }] : [];
+    return [{ ...item, images: options.filterStoryImages ? weekImages : images }];
   });
 }
