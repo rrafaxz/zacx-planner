@@ -109,7 +109,7 @@ const titleMatchers: Record<CopySectionKey, RegExp> = {
   paidTraffic: /^planejamento\s+do\s+tr[aá]fego\s+pago$/i,
 };
 
-const fontOptions = ["Sora"];
+const fontOptions = ["Poppins", "Sora"];
 const sizeOptions = ["7px", "8px", "9px", "10px", "11px", "12px", "14px", "16px", "18px", "20px", "24px", "30px", "36px", "48px", "60px", "72px", "96px"];
 const weightOptions = [
   { label: "Light", value: "300" },
@@ -125,7 +125,8 @@ const lightAccent = "#1D10D7";
 const emptyContent = "<p></p>";
 const bodyColorToken = "body";
 const accentColorToken = "accent";
-const documentFontFamily = "Sora";
+const documentFontFamily = "Poppins";
+const documentHeadingFontFamily = "Sora";
 const supportedPlanningImageTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
 const transferableTextStyleProperties = [
   "color",
@@ -1374,15 +1375,34 @@ function moveBlockTextStylesToInlineSpans(document: Document) {
   });
 }
 
+function normalizeSupportedFontFamily(value: string | null | undefined, fallback = documentFontFamily) {
+  const normalizedValue = `${value || ""}`.toLowerCase();
+
+  if (normalizedValue.includes("sora")) return documentHeadingFontFamily;
+  if (normalizedValue.includes("poppins")) return documentFontFamily;
+
+  return fallback;
+}
+
 function normalizeDocumentFontFamilies(document: Document) {
   document.body.querySelectorAll<HTMLElement>("font[face]").forEach((element) => {
-    element.style.setProperty("font-family", documentFontFamily);
+    const nextFontFamily = normalizeSupportedFontFamily(element.getAttribute("face"));
+
+    element.style.setProperty("font-family", nextFontFamily);
     element.removeAttribute("face");
   });
 
   document.body.querySelectorAll<HTMLElement>("*").forEach((element) => {
-    if (element.style.getPropertyValue("font-family")) {
-      element.style.setProperty("font-family", documentFontFamily);
+    const isHeading = Boolean(element.closest("h1, h2, h3, h4, h5, h6"));
+    const currentFontFamily = element.style.getPropertyValue("font-family");
+
+    if (isHeading) {
+      element.style.setProperty("font-family", documentHeadingFontFamily);
+      return;
+    }
+
+    if (currentFontFamily) {
+      element.style.setProperty("font-family", normalizeSupportedFontFamily(currentFontFamily));
     }
   });
 }
@@ -3831,7 +3851,7 @@ export function CopyDocument({
         .tiptap-copy-editor .ProseMirror {
           min-height: 68vh;
           outline: none;
-          font-family: var(--font-sora), Sora, var(--font-poppins), Poppins, sans-serif;
+          font-family: var(--font-poppins), Poppins, sans-serif;
           white-space: pre-wrap;
           word-break: break-word;
         }
@@ -3862,7 +3882,7 @@ export function CopyDocument({
 
         .copy-document-fixed-header p {
           margin: 0 !important;
-          font-family: var(--font-sora), Sora, var(--font-poppins), Poppins, sans-serif;
+          font-family: var(--font-poppins), Poppins, sans-serif;
           font-size: clamp(13px, 1.4vw, 16px);
           line-height: 1.35;
           font-weight: 500;
@@ -4238,6 +4258,27 @@ export function CopyDocument({
         .tiptap-copy-editor .ProseMirror h3 {
           font-family: var(--font-sora), Sora, var(--font-poppins), Poppins, sans-serif;
           letter-spacing: 0;
+        }
+
+        .tiptap-copy-editor .ProseMirror p,
+        .tiptap-copy-editor .ProseMirror li,
+        .tiptap-copy-editor .ProseMirror blockquote,
+        .tiptap-copy-editor .ProseMirror td {
+          font-family: var(--font-poppins), Poppins, sans-serif;
+        }
+
+        .tiptap-copy-editor .ProseMirror strong,
+        .tiptap-copy-editor .ProseMirror b {
+          font-weight: 700;
+        }
+
+        .tiptap-copy-editor .ProseMirror em,
+        .tiptap-copy-editor .ProseMirror i {
+          font-style: italic;
+        }
+
+        .tiptap-copy-editor .ProseMirror u {
+          text-decoration: underline;
         }
 
         .tiptap-copy-editor .ProseMirror ul {

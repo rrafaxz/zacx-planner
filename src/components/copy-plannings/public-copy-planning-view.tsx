@@ -38,6 +38,16 @@ type CopyPlanningWithSectionFields = CopyPlanning & {
   videos_content?: string | null;
 };
 
+function sectionHtmlFromStoredContent(
+  sectionKey: CopySectionKey,
+  legacySections: CopyDocumentSections,
+  fieldContent?: string | null,
+) {
+  const documentSectionContent = legacySections[sectionKey];
+
+  return hasSectionContent(documentSectionContent) ? documentSectionContent : fieldContent ?? documentSectionContent;
+}
+
 function NotFoundState() {
   return (
     <main className="min-h-screen bg-background px-4 py-8 text-foreground">
@@ -95,10 +105,10 @@ export function PublicCopyPlanningView({ slug }: PublicCopyPlanningViewProps) {
       setPlanning(planningWithSections);
       setClient(clientData);
       setSections({
-        posts: cleanCopySectionHtml("posts", planningWithSections.posts_content ?? legacySections.posts, clientData?.name),
-        carousels: cleanCopySectionHtml("carousels", planningWithSections.carousels_content ?? legacySections.carousels, clientData?.name),
-        stories: cleanCopySectionHtml("stories", planningWithSections.stories_content ?? legacySections.stories, clientData?.name),
-        videos: cleanCopySectionHtml("videos", planningWithSections.videos_content ?? legacySections.videos, clientData?.name),
+        posts: cleanCopySectionHtml("posts", sectionHtmlFromStoredContent("posts", legacySections, planningWithSections.posts_content), clientData?.name),
+        carousels: cleanCopySectionHtml("carousels", sectionHtmlFromStoredContent("carousels", legacySections, planningWithSections.carousels_content), clientData?.name),
+        stories: cleanCopySectionHtml("stories", sectionHtmlFromStoredContent("stories", legacySections, planningWithSections.stories_content), clientData?.name),
+        videos: cleanCopySectionHtml("videos", sectionHtmlFromStoredContent("videos", legacySections, planningWithSections.videos_content), clientData?.name),
         photos: cleanCopySectionHtml("photos", legacySections.photos, clientData?.name),
         paidTraffic: cleanCopySectionHtml("paidTraffic", legacySections.paidTraffic, clientData?.name),
       });

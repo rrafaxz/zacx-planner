@@ -48,6 +48,23 @@ function safeStorageFileName(fileName: string) {
   return name.replace(/[^a-zA-Z0-9._-]/g, "-") || "asset";
 }
 
+function sectionHtmlFromStoredContent(
+  sectionKey: CopySectionKey,
+  legacySections: CopyDocumentSections,
+  fieldContent?: string | null,
+) {
+  const documentSectionContent = legacySections[sectionKey];
+
+  return hasSectionContent(documentSectionContent) ? documentSectionContent : fieldContent ?? documentSectionContent;
+}
+
+function normalizeSectionsForSave(sections: CopyDocumentSections, clientName?: string | null) {
+  return copySectionMeta.reduce<CopyDocumentSections>((currentSections, section) => {
+    currentSections[section.key] = cleanCopySectionHtml(section.key, sections[section.key], clientName || undefined);
+    return currentSections;
+  }, { ...emptyCopySections });
+}
+
 export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
   const [planning, setPlanning] = useState<CopyPlanning | null>(null);
   const [client, setClient] = useState<Client | null>(null);
@@ -97,10 +114,10 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
       const legacySections = parseCopyDocumentContent(planningWithSections.document_content);
 
       const nextSections = {
-        posts: cleanCopySectionHtml("posts", planningWithSections.posts_content ?? legacySections.posts, clientData?.name),
-        carousels: cleanCopySectionHtml("carousels", planningWithSections.carousels_content ?? legacySections.carousels, clientData?.name),
-        stories: cleanCopySectionHtml("stories", planningWithSections.stories_content ?? legacySections.stories, clientData?.name),
-        videos: cleanCopySectionHtml("videos", planningWithSections.videos_content ?? legacySections.videos, clientData?.name),
+        posts: cleanCopySectionHtml("posts", sectionHtmlFromStoredContent("posts", legacySections, planningWithSections.posts_content), clientData?.name),
+        carousels: cleanCopySectionHtml("carousels", sectionHtmlFromStoredContent("carousels", legacySections, planningWithSections.carousels_content), clientData?.name),
+        stories: cleanCopySectionHtml("stories", sectionHtmlFromStoredContent("stories", legacySections, planningWithSections.stories_content), clientData?.name),
+        videos: cleanCopySectionHtml("videos", sectionHtmlFromStoredContent("videos", legacySections, planningWithSections.videos_content), clientData?.name),
         photos: cleanCopySectionHtml("photos", legacySections.photos, clientData?.name),
         paidTraffic: cleanCopySectionHtml("paidTraffic", legacySections.paidTraffic, clientData?.name),
       };
@@ -154,7 +171,11 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
     };
   }, [confirmArchiveOpen]);
 
-  const saveSectionContent = useCallback(async (sectionKey: CopySectionKey, rawContent: string, showNotice = false) => {
+  const saveDocumentSections = useCallback(async (
+    nextSections: CopyDocumentSections,
+    showNotice = false,
+    noticeMessage = "Documento salvo.",
+  ) => {
     if (!planning) return;
 
     setSaving(true);
@@ -162,35 +183,27 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
     setError(null);
     if (showNotice) setNotice(null);
 
-    const activeContent = cleanCopySectionHtml(sectionKey, rawContent, client?.name);
-    const nextSavedSections = {
-      ...lastSavedSectionsRef.current,
-      [sectionKey]: activeContent,
-    };
-    const activeField = copySectionFieldMap[sectionKey];
-    const updatePayload = activeField
-      ? { [activeField]: activeContent }
-      : { document_content: serializeCopyDocumentSections(nextSavedSections) };
+    const requestedSectionsSnapshot = serializeCopyDocumentSections(nextSections);
+    const nextSavedSections = normalizeSectionsForSave(nextSections, client?.name);
+    const serializedSections = serializeCopyDocumentSections(nextSavedSections);
     const { error: requestError } = await supabase
       .from("copy_plannings")
-      .update(updatePayload as never)
+      .update({ document_content: serializedSections } as never)
       .eq("id", planning.id);
 
     if (requestError) {
       setError(requestError.message);
       setAutosaveStatus("error");
     } else {
-      const nextPlanning = activeField
-        ? { ...planning, [activeField]: activeContent }
-        : { ...planning, document_content: serializeCopyDocumentSections(nextSavedSections) };
-
       setPlanning({
-        ...nextPlanning,
+        ...planning,
+        document_content: serializedSections,
       } as CopyPlanningWithSectionFields);
+      setSections((currentSections) =>
+        serializeCopyDocumentSections(currentSections) === requestedSectionsSnapshot ? nextSavedSections : currentSections,
+      );
       lastSavedSectionsRef.current = nextSavedSections;
-      const activeLabel =
-        copySectionMeta.find((section) => section.key === sectionKey)?.label || "Seção";
-      if (showNotice) setNotice(`${activeLabel} salvo.`);
+      if (showNotice) setNotice(noticeMessage);
       setAutosaveStatus("saved");
     }
 
@@ -200,20 +213,21 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
   useEffect(() => {
     if (!planning || !initialLoadCompleteRef.current) return;
 
-    const currentContent = sections[activeSection] || "";
-    const lastSavedContent = lastSavedSectionsRef.current[activeSection] || "";
+    const hasUnsavedSections = copySectionMeta.some(
+      (section) => (sections[section.key] || "") !== (lastSavedSectionsRef.current[section.key] || ""),
+    );
 
-    if (currentContent === lastSavedContent) {
+    if (!hasUnsavedSections) {
       return;
     }
 
     setAutosaveStatus("pending");
     const timeout = window.setTimeout(() => {
-      void saveSectionContent(activeSection, currentContent);
+      void saveDocumentSections(sections);
     }, 1100);
 
     return () => window.clearTimeout(timeout);
-  }, [activeSection, client?.name, planning, saveSectionContent, sections]);
+  }, [planning, saveDocumentSections, sections]);
 
   async function uploadPlanningAsset(file: File) {
     if (!planning) return null;

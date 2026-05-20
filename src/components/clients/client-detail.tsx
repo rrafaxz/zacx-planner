@@ -210,6 +210,23 @@ function clientNameForTitle(clientName: string) {
   return clientName.trim().toUpperCase() || "CLIENTE";
 }
 
+function normalizeTitleComparison(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, " ");
+}
+
+function normalizeSlugComparison(value: string) {
+  return value.trim().toLowerCase().replace(/-+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function buildPresentationTitle(clientName: string, startDate: string, endDate: string) {
   if (!isValidDayMonth(startDate) || !isValidDayMonth(endDate)) {
     return buildVisualPresentationTitleFromRange(clientName);
@@ -221,12 +238,96 @@ function buildPresentationTitle(clientName: string, startDate: string, endDate: 
   });
 }
 
-function buildPlanningTitle(clientName: string, startDate: string) {
-  return `${clientNameForTitle(clientName)} PLANEJAMENTO ${getMonthNameFromDayMonth(startDate) || "--"}`;
+function buildPlanningTitle(clientName: string, startDate: string, sequenceNumber?: number | null) {
+  const baseTitle = `${clientNameForTitle(clientName)} PLANEJAMENTO ${getMonthNameFromDayMonth(startDate) || "--"}`;
+
+  return sequenceNumber && sequenceNumber > 1 ? `${baseTitle} ${sequenceNumber}` : baseTitle;
+}
+
+function buildPlanningSlug(clientSlug: string, monthName: string, sequenceNumber?: number | null) {
+  const clientSlugPart = slugify(clientSlug) || "cliente";
+  const monthSlugPart = slugify(monthName) || "sem-mes";
+  const baseSlug = `${clientSlugPart}-planejamento-${monthSlugPart}`;
+
+  return sequenceNumber && sequenceNumber > 1 ? `${baseSlug}-${sequenceNumber}` : baseSlug;
 }
 
 function buildSlugFromTitle(title: string) {
   return slugify(title);
+}
+
+function planningSequenceFromTitle(title: string | null | undefined, baseTitle: string) {
+  const normalizedTitle = normalizeTitleComparison(title || "");
+  const normalizedBaseTitle = normalizeTitleComparison(baseTitle);
+
+  if (!normalizedTitle || !normalizedBaseTitle) return null;
+  if (normalizedTitle === normalizedBaseTitle) return 1;
+
+  const match = normalizedTitle.match(new RegExp(`^${escapeRegExp(normalizedBaseTitle)} (\\d+)$`));
+  const sequence = match ? Number(match[1]) : 0;
+
+  return Number.isFinite(sequence) && sequence > 1 ? sequence : null;
+}
+
+function planningSequenceFromSlug(slug: string | null | undefined, baseSlug: string) {
+  const normalizedSlug = normalizeSlugComparison(slug || "");
+  const normalizedBaseSlug = normalizeSlugComparison(baseSlug);
+
+  if (!normalizedSlug || !normalizedBaseSlug) return null;
+  if (normalizedSlug === normalizedBaseSlug) return 1;
+
+  const match = normalizedSlug.match(new RegExp(`^${escapeRegExp(normalizedBaseSlug)}-(\\d+)$`));
+  const sequence = match ? Number(match[1]) : 0;
+
+  return Number.isFinite(sequence) && sequence > 1 ? sequence : null;
+}
+
+function planningMonthKey(value: string | null | undefined) {
+  const formattedValue = formatDateInput(value || "");
+
+  if (!isValidDayMonth(formattedValue)) return null;
+
+  return formattedValue.split("/")[1] || null;
+}
+
+function nextPlanningSequenceForMonth(
+  plannings: CopyPlanningWithPreview[],
+  startDate: string,
+  baseTitle: string,
+  baseSlug: string,
+) {
+  const targetMonth = planningMonthKey(startDate);
+
+  if (!targetMonth) return 1;
+
+  const usedSequences = new Set<number>();
+
+  plannings.forEach((planning) => {
+    const titleSequence = planningSequenceFromTitle(planning.title, baseTitle);
+    const slugSequence = planningSequenceFromSlug(planning.public_slug, baseSlug);
+    const matchesMonthByDate = planningMonthKey(planning.start_display_date) === targetMonth;
+    const matchesMonthByNaming = titleSequence !== null || slugSequence !== null;
+
+    if (!matchesMonthByDate && !matchesMonthByNaming) return;
+
+    usedSequences.add(1);
+
+    if (titleSequence && titleSequence > 1) {
+      usedSequences.add(titleSequence);
+    }
+
+    if (slugSequence && slugSequence > 1) {
+      usedSequences.add(slugSequence);
+    }
+  });
+
+  let sequenceNumber = 1;
+
+  while (usedSequences.has(sequenceNumber)) {
+    sequenceNumber += 1;
+  }
+
+  return sequenceNumber;
 }
 
 function buildPeriodLabel(startDate: string, endDate: string) {
@@ -990,13 +1091,41 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
     setSelectedPresentationIds([]);
   }, [showArchivedPresentations]);
 
-  const copyPlanningTitle = useMemo(
+  const copyPlanningMonthName = useMemo(
+    () => getMonthNameFromDayMonth(copyForm.startDate) || "--",
+    [copyForm.startDate],
+  );
+  const copyPlanningBaseTitle = useMemo(
     () => buildPlanningTitle(client?.name || "Cliente", copyForm.startDate),
     [client?.name, copyForm.startDate],
   );
   const copyBasePublicSlug = useMemo(
-    () => buildSlugFromTitle(copyPlanningTitle),
-    [copyPlanningTitle],
+    () => buildPlanningSlug(client?.slug || client?.name || "cliente", copyPlanningMonthName),
+    [client?.name, client?.slug, copyPlanningMonthName],
+  );
+  const copyPlanningSequence = useMemo(
+    () =>
+      nextPlanningSequenceForMonth(
+        copyPlannings,
+        copyForm.startDate,
+        copyPlanningBaseTitle,
+        copyBasePublicSlug,
+      ),
+    [copyBasePublicSlug, copyForm.startDate, copyPlanningBaseTitle, copyPlannings],
+  );
+  const copyPreferredPublicSlug = useMemo(
+    () => buildPlanningSlug(client?.slug || client?.name || "cliente", copyPlanningMonthName, copyPlanningSequence),
+    [client?.name, client?.slug, copyPlanningMonthName, copyPlanningSequence],
+  );
+  const copyPlanningTitle = useMemo(
+    () =>
+      buildPlanningTitle(
+        client?.name || "Cliente",
+        copyForm.startDate,
+        planningSequenceFromSlug(copyPublicSlug || copyPreferredPublicSlug, copyBasePublicSlug) ??
+          copyPlanningSequence,
+      ),
+    [client?.name, copyBasePublicSlug, copyForm.startDate, copyPlanningSequence, copyPreferredPublicSlug, copyPublicSlug],
   );
   const visualPresentationTitle = useMemo(
     () => buildPresentationTitle(client?.name || "Cliente", visualForm.startDate, visualForm.endDate),
@@ -1011,7 +1140,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
     let active = true;
 
     if (creationMode !== "copy" || !isValidDayMonth(copyForm.startDate)) {
-      setCopyPublicSlug(copyBasePublicSlug);
+      setCopyPublicSlug(copyPreferredPublicSlug);
       setCopySlugLoading(false);
       return () => {
         active = false;
@@ -1019,7 +1148,9 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
     }
 
     setCopySlugLoading(true);
-    resolveUniquePublicSlug("copy_plannings", copyBasePublicSlug)
+    resolveUniquePublicSlug("copy_plannings", copyBasePublicSlug, {
+      preferredCandidate: copyPreferredPublicSlug,
+    })
       .then((slug) => {
         if (active) {
           setCopyPublicSlug(slug);
@@ -1027,7 +1158,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
       })
       .catch(() => {
         if (active) {
-          setCopyPublicSlug(copyBasePublicSlug);
+          setCopyPublicSlug(copyPreferredPublicSlug);
         }
       })
       .finally(() => {
@@ -1039,7 +1170,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
     return () => {
       active = false;
     };
-  }, [copyBasePublicSlug, copyForm.startDate, creationMode]);
+  }, [copyBasePublicSlug, copyForm.startDate, copyPreferredPublicSlug, creationMode]);
 
   useEffect(() => {
     let active = true;
@@ -1441,10 +1572,12 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
     setSavingCopy(true);
     setError(null);
 
-    let uniquePublicSlug = copyPublicSlug || copyBasePublicSlug;
+    let uniquePublicSlug = copyPublicSlug || copyPreferredPublicSlug;
 
     try {
-      uniquePublicSlug = await resolveUniquePublicSlug("copy_plannings", copyBasePublicSlug);
+      uniquePublicSlug = await resolveUniquePublicSlug("copy_plannings", copyBasePublicSlug, {
+        preferredCandidate: copyPreferredPublicSlug,
+      });
     } catch (requestError) {
       setError(
         `Erro ao gerar link publico: ${
@@ -1455,9 +1588,13 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
       return;
     }
 
+    const finalSequence =
+      planningSequenceFromSlug(uniquePublicSlug, copyBasePublicSlug) ?? copyPlanningSequence;
+    const finalTitle = buildPlanningTitle(client?.name || "Cliente", copyForm.startDate, finalSequence);
+
     const newPlanning = {
       client_id: clientId,
-      title: copyPlanningTitle,
+      title: finalTitle,
       public_slug: uniquePublicSlug,
       period_label: buildPeriodLabel(copyForm.startDate, copyForm.endDate),
       start_display_date: copyForm.startDate,
@@ -2799,7 +2936,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                 <p className="rounded-md border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
                   Link publico sera:{" "}
                   <span className="font-medium text-foreground">
-                    {copySlugLoading ? "verificando..." : copyPublicSlug || copyBasePublicSlug}
+                    {copySlugLoading ? "verificando..." : copyPublicSlug || copyPreferredPublicSlug}
                   </span>
                 </p>
                 {error ? (
