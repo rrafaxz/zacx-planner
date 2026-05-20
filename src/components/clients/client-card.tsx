@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Archive, CheckSquare2, RotateCcw, Square } from "lucide-react";
+import { CheckSquare2, FileText, Square } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import type { Client } from "@/lib/supabase/types";
@@ -10,7 +10,7 @@ type ClientCardProps = {
   selectionMode?: boolean;
   selected?: boolean;
   onToggleSelected?: () => void;
-  onArchiveToggle?: () => void;
+  endingPlanningLabel?: string | null;
 };
 
 export function ClientCard({
@@ -18,7 +18,7 @@ export function ClientCard({
   selectionMode = false,
   selected = false,
   onToggleSelected,
-  onArchiveToggle,
+  endingPlanningLabel,
 }: ClientCardProps) {
   const accentColor = client.primary_color || "#E5E7EB";
   const secondaryColor = client.secondary_color || accentColor;
@@ -28,7 +28,7 @@ export function ClientCard({
       className={cn(
         "group h-full overflow-hidden bg-background shadow-none transition hover:-translate-y-0.5 hover:border-foreground/20",
         isArchived && !selected && "border-dashed opacity-70 hover:border-foreground/20",
-        selected && "border-blue-400 bg-blue-500/[0.06] dark:border-blue-400/60 dark:bg-blue-400/10",
+        selected && "border-blue-400 bg-neutral-900/[0.045] dark:border-blue-400/60 dark:bg-white/[0.06]",
       )}
     >
       <CardContent className="relative flex min-h-[76px] items-center gap-3 p-3 sm:min-h-[92px] sm:p-4">
@@ -39,6 +39,15 @@ export function ClientCard({
         {selectionMode ? (
           <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-border bg-background text-foreground">
             {selected ? <CheckSquare2 className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+          </span>
+        ) : null}
+        {endingPlanningLabel ? (
+          <span
+            className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-md text-red-500"
+            title={`Planejamento próximo do fim: ${endingPlanningLabel}`}
+            aria-label={`Planejamento próximo do fim: ${endingPlanningLabel}`}
+          >
+            <FileText className="h-4 w-4" />
           </span>
         ) : null}
         <div
@@ -72,21 +81,6 @@ export function ClientCard({
             <p className="mt-1 text-[11px] text-muted-foreground">Responsável: {client.responsible_name}</p>
           ) : null}
         </div>
-        {onArchiveToggle && !selectionMode ? (
-          <button
-            type="button"
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onArchiveToggle();
-            }}
-            aria-label={isArchived ? "Desarquivar cliente" : "Arquivar cliente"}
-            title={isArchived ? "Desarquivar" : "Arquivar"}
-          >
-            {isArchived ? <RotateCcw className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
-          </button>
-        ) : null}
       </CardContent>
     </Card>
   );

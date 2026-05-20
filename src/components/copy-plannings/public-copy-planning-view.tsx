@@ -8,17 +8,12 @@ import {
   type CopySectionKey,
   type CopyDocumentSections,
   cleanCopySectionHtml,
-  copySectionFieldMap,
   copySectionMeta,
   emptyCopySections,
   hasSectionContent,
   parseCopyDocumentContent,
 } from "@/components/copy-plannings/copy-document";
 import { PlanningVisualBoard } from "@/components/copy-plannings/planning-visual-board";
-import type {
-  PlanningVisualSectionKey,
-  PlanningVisualSections,
-} from "@/components/copy-plannings/planning-visual-parser";
 import { PublicClientHeading } from "@/components/public-view/public-client-heading";
 import { PublicHeader } from "@/components/public-view/public-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -61,7 +56,6 @@ export function PublicCopyPlanningView({ slug }: PublicCopyPlanningViewProps) {
   const [sections, setSections] = useState<CopyDocumentSections>({ ...emptyCopySections });
   const [activeSection, setActiveSection] = useState<CopySectionKey>("posts");
   const [loading, setLoading] = useState(true);
-  const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function loadPlanning() {
@@ -100,6 +94,8 @@ export function PublicCopyPlanningView({ slug }: PublicCopyPlanningViewProps) {
         carousels: cleanCopySectionHtml("carousels", planningWithSections.carousels_content ?? legacySections.carousels, clientData?.name),
         stories: cleanCopySectionHtml("stories", planningWithSections.stories_content ?? legacySections.stories, clientData?.name),
         videos: cleanCopySectionHtml("videos", planningWithSections.videos_content ?? legacySections.videos, clientData?.name),
+        photos: cleanCopySectionHtml("photos", legacySections.photos, clientData?.name),
+        paidTraffic: cleanCopySectionHtml("paidTraffic", legacySections.paidTraffic, clientData?.name),
       });
     }
 
@@ -128,36 +124,6 @@ export function PublicCopyPlanningView({ slug }: PublicCopyPlanningViewProps) {
 
     setActiveSection(visibleSectionKeys[0]);
   }, [activeSection, visibleSectionKeys]);
-
-  async function saveVisualSections(
-    nextSections: PlanningVisualSections,
-    changedSection: PlanningVisualSectionKey,
-  ) {
-    if (!planning) return;
-
-    setError(null);
-    setFeedback(null);
-
-    const sectionField = copySectionFieldMap[changedSection];
-    const nextContent = cleanCopySectionHtml(changedSection, nextSections[changedSection], client?.name);
-    const { error: requestError } = await supabase
-      .from("copy_plannings")
-      .update({
-        [sectionField]: nextContent,
-      } as never)
-      .eq("id", planning.id);
-
-    if (requestError) {
-      setError(requestError.message);
-      throw new Error(requestError.message);
-    }
-
-    setSections({
-      ...nextSections,
-      [changedSection]: nextContent,
-    });
-    setFeedback("Alterações salvas no planejamento.");
-  }
 
   if (loading) {
     return (
@@ -191,12 +157,6 @@ export function PublicCopyPlanningView({ slug }: PublicCopyPlanningViewProps) {
           </Card>
         ) : null}
 
-        {feedback ? (
-          <Card className="mt-5 border-emerald-500/30 bg-emerald-500/10">
-            <CardContent className="pt-5 text-sm text-emerald-100">{feedback}</CardContent>
-          </Card>
-        ) : null}
-
         <Tabs defaultValue="visual" className="mt-5 space-y-5 md:mt-6 md:space-y-6">
           <TabsList className="h-9 w-full justify-start overflow-x-auto sm:w-auto">
             <TabsTrigger value="visual" className="h-8 px-3 text-xs sm:text-sm">Visual</TabsTrigger>
@@ -208,8 +168,6 @@ export function PublicCopyPlanningView({ slug }: PublicCopyPlanningViewProps) {
               sections={sections}
               clientColor={client?.primary_color}
               clientSecondaryColor={client?.secondary_color}
-              editable
-              onSectionsChange={saveVisualSections}
             />
           </TabsContent>
 

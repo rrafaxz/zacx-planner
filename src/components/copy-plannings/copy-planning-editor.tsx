@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Archive, ArrowLeft, Clipboard, ExternalLink, Save } from "lucide-react";
+import { Archive, ArrowLeft, CheckCircle2, Clipboard, ExternalLink, Loader2 } from "lucide-react";
 
 import {
   CopyDocument,
@@ -14,6 +14,7 @@ import {
   emptyCopySections,
   hasSectionContent,
   parseCopyDocumentContent,
+  serializeCopyDocumentSections,
 } from "@/components/copy-plannings/copy-document";
 import { PlanningVisualBoard } from "@/components/copy-plannings/planning-visual-board";
 import type {
@@ -23,6 +24,7 @@ import type {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { optimizeImage } from "@/lib/image-optimizer";
 import { supabase } from "@/lib/supabase/client";
 import type { Client, CopyPlanning } from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
@@ -38,6 +40,14 @@ type CopyPlanningWithSectionFields = CopyPlanning & {
   videos_content?: string | null;
 };
 
+type AutosaveStatus = "idle" | "pending" | "saving" | "saved" | "error";
+
+function safeStorageFileName(fileName: string) {
+  const name = fileName.split(/[/\\]/).pop() || "asset";
+
+  return name.replace(/[^a-zA-Z0-9._-]/g, "-") || "asset";
+}
+
 export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
   const [planning, setPlanning] = useState<CopyPlanning | null>(null);
   const [client, setClient] = useState<Client | null>(null);
@@ -47,12 +57,15 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
   const [origin, setOrigin] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [autosaveStatus, setAutosaveStatus] = useState<AutosaveStatus>("idle");
   const [savingTitle, setSavingTitle] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [confirmArchiveOpen, setConfirmArchiveOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const initialLoadCompleteRef = useRef(false);
+  const lastSavedSectionsRef = useRef<CopyDocumentSections>({ ...emptyCopySections });
 
   async function loadPlanning() {
     setLoading(true);
@@ -83,15 +96,22 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
       const planningWithSections = planningData as CopyPlanningWithSectionFields;
       const legacySections = parseCopyDocumentContent(planningWithSections.document_content);
 
-      setPlanning(planningData);
-      setTitleDraft(planningData.title || "");
-      setClient(clientData);
-      setSections({
+      const nextSections = {
         posts: cleanCopySectionHtml("posts", planningWithSections.posts_content ?? legacySections.posts, clientData?.name),
         carousels: cleanCopySectionHtml("carousels", planningWithSections.carousels_content ?? legacySections.carousels, clientData?.name),
         stories: cleanCopySectionHtml("stories", planningWithSections.stories_content ?? legacySections.stories, clientData?.name),
         videos: cleanCopySectionHtml("videos", planningWithSections.videos_content ?? legacySections.videos, clientData?.name),
-      });
+        photos: cleanCopySectionHtml("photos", legacySections.photos, clientData?.name),
+        paidTraffic: cleanCopySectionHtml("paidTraffic", legacySections.paidTraffic, clientData?.name),
+      };
+
+      setPlanning(planningData);
+      setTitleDraft(planningData.title || "");
+      setClient(clientData);
+      setSections(nextSections);
+      lastSavedSectionsRef.current = nextSections;
+      initialLoadCompleteRef.current = true;
+      setAutosaveStatus("saved");
     }
 
     setLoading(false);
@@ -102,39 +122,89 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
     loadPlanning();
   }, [planningId]);
 
-  async function saveContent() {
+  const saveSectionContent = useCallback(async (sectionKey: CopySectionKey, rawContent: string, showNotice = false) => {
     if (!planning) return;
 
     setSaving(true);
+    setAutosaveStatus("saving");
     setError(null);
-    setNotice(null);
+    if (showNotice) setNotice(null);
 
-    const activeField = copySectionFieldMap[activeSection];
-    const activeContent = cleanCopySectionHtml(activeSection, sections[activeSection], client?.name);
+    const activeContent = cleanCopySectionHtml(sectionKey, rawContent, client?.name);
+    const nextSavedSections = {
+      ...lastSavedSectionsRef.current,
+      [sectionKey]: activeContent,
+    };
+    const activeField = copySectionFieldMap[sectionKey];
+    const updatePayload = activeField
+      ? { [activeField]: activeContent }
+      : { document_content: serializeCopyDocumentSections(nextSavedSections) };
     const { error: requestError } = await supabase
       .from("copy_plannings")
-      .update({
-        [activeField]: activeContent,
-      } as never)
+      .update(updatePayload as never)
       .eq("id", planning.id);
 
     if (requestError) {
       setError(requestError.message);
+      setAutosaveStatus("error");
     } else {
+      const nextPlanning = activeField
+        ? { ...planning, [activeField]: activeContent }
+        : { ...planning, document_content: serializeCopyDocumentSections(nextSavedSections) };
+
       setPlanning({
-        ...planning,
-        [activeField]: activeContent,
+        ...nextPlanning,
       } as CopyPlanningWithSectionFields);
-      setSections((currentSections) => ({
-        ...currentSections,
-        [activeSection]: activeContent,
-      }));
+      lastSavedSectionsRef.current = nextSavedSections;
       const activeLabel =
-        copySectionMeta.find((section) => section.key === activeSection)?.label || "Seção";
-      setNotice(`${activeLabel} salvo.`);
+        copySectionMeta.find((section) => section.key === sectionKey)?.label || "Seção";
+      if (showNotice) setNotice(`${activeLabel} salvo.`);
+      setAutosaveStatus("saved");
     }
 
     setSaving(false);
+  }, [client?.name, planning]);
+
+  useEffect(() => {
+    if (!planning || !initialLoadCompleteRef.current) return;
+
+    const currentContent = sections[activeSection] || "";
+    const lastSavedContent = lastSavedSectionsRef.current[activeSection] || "";
+
+    if (currentContent === lastSavedContent) {
+      return;
+    }
+
+    setAutosaveStatus("pending");
+    const timeout = window.setTimeout(() => {
+      void saveSectionContent(activeSection, currentContent);
+    }, 1100);
+
+    return () => window.clearTimeout(timeout);
+  }, [activeSection, client?.name, planning, saveSectionContent, sections]);
+
+  async function uploadPlanningAsset(file: File) {
+    if (!planning) return null;
+
+    const optimizedFile = await optimizeImage(file, "post");
+    const storagePath = `plannings/${planning.id}/${Date.now()}-${safeStorageFileName(optimizedFile.name)}`;
+    const { error: uploadError } = await supabase.storage
+      .from("planning-assets")
+      .upload(storagePath, optimizedFile, {
+        contentType: optimizedFile.type || undefined,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      setError(uploadError.message);
+      return null;
+    }
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("planning-assets").getPublicUrl(storagePath);
+
+    return publicUrl;
   }
 
   async function saveTitle() {
@@ -175,18 +245,24 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
   ) {
     if (!planning) return;
 
-    const sectionField = copySectionFieldMap[changedSection];
     const nextContent = cleanCopySectionHtml(changedSection, nextSections[changedSection], client?.name);
+    const sectionField = copySectionFieldMap[changedSection];
+    const nextSavedSections = {
+      ...lastSavedSectionsRef.current,
+      [changedSection]: nextContent,
+    };
+    const updatePayload = sectionField
+      ? { [sectionField]: nextContent }
+      : { document_content: serializeCopyDocumentSections(nextSavedSections) };
 
     setSaving(true);
+    setAutosaveStatus("saving");
     setError(null);
     setNotice(null);
 
     const { error: requestError } = await supabase
       .from("copy_plannings")
-      .update({
-        [sectionField]: nextContent,
-      } as never)
+      .update(updatePayload as never)
       .eq("id", planning.id);
 
     setSaving(false);
@@ -200,10 +276,13 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
       ...nextSections,
       [changedSection]: nextContent,
     });
-    setPlanning({
-      ...planning,
-      [sectionField]: nextContent,
-    } as CopyPlanningWithSectionFields);
+    setPlanning(
+      (sectionField
+        ? { ...planning, [sectionField]: nextContent }
+        : { ...planning, document_content: serializeCopyDocumentSections(nextSavedSections) }) as CopyPlanningWithSectionFields,
+    );
+    lastSavedSectionsRef.current = nextSavedSections;
+    setAutosaveStatus("saved");
     setNotice("Card salvo no documento original.");
   }
 
@@ -353,10 +432,20 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
                   <Archive className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">{archiving ? "Arquivando..." : "Arquivar"}</span>
                 </Button>
-                <Button onClick={saveContent} disabled={saving} size="sm" className="h-8 px-3 text-xs" aria-label="Salvar" title="Salvar">
-                  <Save className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">{saving ? "Salvando..." : "Salvar"}</span>
-                </Button>
+                <div className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs text-muted-foreground">
+                  {autosaveStatus === "saving" || autosaveStatus === "pending" ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : autosaveStatus === "saved" ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                  ) : null}
+                  <span>
+                    {autosaveStatus === "saving" || autosaveStatus === "pending"
+                      ? "Salvando..."
+                      : autosaveStatus === "error"
+                        ? "Erro ao salvar"
+                        : "Salvo"}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -399,6 +488,7 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
             workspaceLayout
             toolbarClassName="!top-[calc(var(--planning-header-offset)_+_var(--planning-header-height))] z-40 mb-0 rounded-none border-x-0 border-t-0 border-b border-border px-3 py-2 shadow-none md:px-5"
             sectionNavigationClassName="lg:!top-[var(--planning-side-nav-top)]"
+            onImageUpload={uploadPlanningAsset}
             sectionNavigation={
               <nav className="no-scrollbar flex gap-1 overflow-x-auto border-y border-border bg-background p-2 lg:min-h-[calc(68vh+5rem)] lg:flex-col lg:overflow-visible lg:rounded-xl lg:border lg:p-3.5">
                 {copySectionMeta.map((section) => {

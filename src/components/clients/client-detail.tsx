@@ -593,26 +593,21 @@ function InlineSearchControl({
 }
 
 function DocumentThumbnail({
-  title,
   preview,
   accentColor,
 }: {
-  title: string;
   preview: string;
   accentColor: string;
 }) {
   return (
-    <div className="h-28 overflow-hidden rounded-lg border border-black/10 bg-white p-2.5 text-neutral-950 sm:h-40 sm:p-3">
-      <div className="mx-auto mb-2.5 h-1 w-10 rounded-full sm:mb-3" style={{ backgroundColor: accentColor }} />
-      <h3 className="sora-heading line-clamp-2 text-center text-[10px] font-semibold uppercase leading-snug text-neutral-950 sm:text-xs">
-        {title}
-      </h3>
+    <div className="h-24 overflow-hidden rounded-lg border border-black/10 bg-white p-2 text-neutral-950 sm:h-32 sm:p-2.5">
+      <div className="mx-auto mb-2 h-1 w-9 rounded-full" style={{ backgroundColor: accentColor }} />
       {preview ? (
         <p
-          className="mt-2 text-[9px] leading-3.5 text-neutral-500 sm:mt-3 sm:text-[10px] sm:leading-4"
+          className="text-[8px] leading-3 text-neutral-500 sm:text-[9px] sm:leading-3.5"
           style={{
             display: "-webkit-box",
-            WebkitLineClamp: 7,
+            WebkitLineClamp: 9,
             WebkitBoxOrient: "vertical",
             overflow: "hidden",
           }}
@@ -620,7 +615,7 @@ function DocumentThumbnail({
           {preview}
         </p>
       ) : (
-        <div className="mt-5 space-y-2">
+        <div className="mt-3 space-y-1.5">
           <span className="block h-2 rounded-full bg-neutral-200" />
           <span className="block h-2 w-5/6 rounded-full bg-neutral-200" />
           <span className="block h-2 w-3/4 rounded-full bg-neutral-200" />
@@ -1875,9 +1870,9 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                       }
                     }}
                     className={cn(
-                      "group relative cursor-pointer rounded-2xl border bg-background p-2 transition hover:-translate-y-0.5 hover:border-foreground/25 sm:p-3",
+                      "group relative flex min-h-[318px] cursor-pointer flex-col rounded-2xl border bg-background p-2 transition hover:-translate-y-0.5 hover:border-foreground/25 sm:min-h-[374px] sm:p-3",
                       isSelected
-                        ? "border-blue-400 bg-blue-500/[0.06] dark:border-blue-400/60 dark:bg-blue-400/10"
+                        ? "border-blue-400 bg-neutral-900/[0.045] dark:border-blue-400/60 dark:bg-white/[0.06]"
                         : "border-border",
                       isArchived && !isSelected && "border-dashed opacity-70",
                     )}
@@ -1891,11 +1886,10 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                       </span>
                     ) : null}
                     <DocumentThumbnail
-                      title={planning.title}
                       preview={previewText}
                       accentColor={isArchived ? "#D4D4D8" : accentColor}
                     />
-                    <div className="space-y-2 px-1 pb-1 pt-3 sm:space-y-3 sm:pt-4">
+                    <div className="flex flex-1 flex-col space-y-2 px-1 pb-1 pt-3 sm:space-y-3 sm:pt-4">
                       <div className="flex items-start justify-between gap-2">
                         <h3 className="sora-heading line-clamp-2 text-sm font-medium leading-snug text-foreground sm:text-base">
                           {planning.title}
@@ -1906,7 +1900,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                         <p>{planning.period_label || "Periodo nao definido"}</p>
                         <p className="hidden sm:block">Criado em {formatDateBR(planning.created_at)}</p>
                       </div>
-                      <div className="flex flex-wrap items-center justify-between gap-1 pt-1 sm:gap-1.5">
+                      <div className="mt-auto flex flex-wrap items-center justify-between gap-1 pt-1 sm:gap-1.5">
                         <div className="flex min-w-0 items-center gap-1.5">
                           <Button
                             type="button"
@@ -2228,7 +2222,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                     className={cn(
                       "group relative cursor-pointer rounded-2xl border bg-background p-2 transition hover:-translate-y-0.5 hover:border-foreground/25 sm:p-4",
                       isSelected
-                        ? "border-blue-400 bg-blue-500/[0.06] dark:border-blue-400/60 dark:bg-blue-400/10"
+                        ? "border-blue-400 bg-neutral-900/[0.045] dark:border-blue-400/60 dark:bg-white/[0.06]"
                         : "border-border",
                       isArchived && !isSelected && "border-dashed opacity-70",
                     )}

@@ -100,7 +100,24 @@ export function PwaInstallButton({ compact = false, className }: PwaInstallButto
     notifyListeners();
   }
 
-  if (isInstalled) return null;
+  if (isInstalled) {
+    return (
+      <button
+        type="button"
+        disabled
+        className={cn(
+          "flex h-11 w-full items-center rounded-md text-sm text-muted-foreground/70",
+          compact ? "justify-center px-0" : "gap-3 px-3",
+          className,
+        )}
+        aria-label="App instalado"
+        title="App instalado"
+      >
+        <Download className="h-4 w-4 shrink-0" />
+        {!compact ? <span>App instalado</span> : null}
+      </button>
+    );
+  }
 
   if (installPrompt) {
     return (
@@ -134,5 +151,20 @@ export function PwaInstallButton({ compact = false, className }: PwaInstallButto
     );
   }
 
-  return null;
+  return (
+    <button
+      type="button"
+      disabled
+      className={cn(
+        "flex h-11 w-full items-center rounded-md text-sm text-muted-foreground/70",
+        compact ? "justify-center px-0" : "gap-3 px-3",
+        className,
+      )}
+      aria-label="Instalar app indisponível"
+      title="Instalar app"
+    >
+      <Download className="h-4 w-4 shrink-0" />
+      {!compact ? <span>Instalar app</span> : null}
+    </button>
+  );
 }

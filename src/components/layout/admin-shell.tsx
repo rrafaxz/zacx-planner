@@ -7,6 +7,8 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
+  HardDrive,
+  LayoutGrid,
   Menu,
   Moon,
   Sun,
@@ -18,13 +20,108 @@ import { Button } from "@/components/ui/button";
 import { PwaInstallButton } from "@/components/pwa-install-button";
 import { useTheme } from "@/components/theme/theme-provider";
 import { ZacxLogo } from "@/components/zacx-logo";
-import { ZacxMark } from "@/components/zacx-mark";
+import { SidebarMenuLogo } from "@/components/sidebar-menu-logo";
+import { supabase } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/admin", label: "Visao geral", icon: BarChart3 },
+  { href: "/admin/atividades", label: "Geral", icon: LayoutGrid },
   { href: "/admin/clientes", label: "Clientes", icon: UsersRound },
 ];
+
+function formatBytes(value: number) {
+  if (value >= 1024 ** 3) return `${(value / 1024 ** 3).toFixed(2)} GB`;
+  if (value >= 1024 ** 2) return `${(value / 1024 ** 2).toFixed(0)} MB`;
+  if (value >= 1024) return `${(value / 1024).toFixed(0)} KB`;
+
+  return `${value} B`;
+}
+
+function StorageUsageMenuItem({ compact = false }: { compact?: boolean }) {
+  const [summary, setSummary] = useState<{ usedBytes: number; fileCount: number } | null>(null);
+  const [error, setError] = useState(false);
+  const limitGb = Number(process.env.NEXT_PUBLIC_STORAGE_LIMIT_GB || "1") || 1;
+  const limitBytes = limitGb * 1024 ** 3;
+  const percent = summary ? Math.min(100, Math.round((summary.usedBytes / limitBytes) * 100)) : 0;
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadUsage() {
+      const { data, error: requestError } = await supabase.rpc("get_storage_usage_summary");
+
+      if (!mounted) return;
+
+      if (requestError) {
+        setError(true);
+        return;
+      }
+
+      const firstRow = Array.isArray(data) ? data[0] : data;
+
+      setSummary({
+        usedBytes: Number(firstRow?.used_bytes ?? 0),
+        fileCount: Number(firstRow?.file_count ?? 0),
+      });
+      setError(false);
+    }
+
+    loadUsage();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  if (compact) {
+    return (
+      <div
+        className="flex h-11 items-center justify-center rounded-md px-0 text-sm text-muted-foreground"
+        title="Armazenamento"
+        aria-label="Armazenamento"
+      >
+        <HardDrive className="h-4 w-4" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-md border border-border bg-background px-3 py-2.5">
+      <div className="mb-2 flex items-center gap-3 text-sm text-muted-foreground">
+        <HardDrive className="h-4 w-4 shrink-0" />
+        <span>Armazenamento</span>
+        {summary ? <span className="ml-auto text-xs">{percent}%</span> : null}
+      </div>
+      <div className="space-y-1.5 text-xs text-muted-foreground">
+        {error ? (
+          <p>Não foi possível carregar armazenamento.</p>
+        ) : summary ? (
+          <>
+            <div className="h-1.5 overflow-hidden rounded-full bg-foreground/[0.08]">
+              <span className="block h-full rounded-full bg-[var(--zacx-brand)]" style={{ width: `${percent}%` }} />
+            </div>
+            <p>
+              {formatBytes(summary.usedBytes)} de {limitGb} GB · {summary.fileCount} arquivos
+            </p>
+          </>
+        ) : (
+          <p>Carregando armazenamento...</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SidebarFooter({ compact = false }: { compact?: boolean }) {
+  return (
+    <nav className="grid gap-2">
+      <ThemeMenuButton compact={compact} />
+      <StorageUsageMenuItem compact={compact} />
+      <PwaInstallButton compact={compact} />
+    </nav>
+  );
+}
 
 function ThemeMenuButton({ compact = false }: { compact?: boolean }) {
   const { theme, toggleTheme } = useTheme();
@@ -137,9 +234,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                   );
                 })}
 
-                <PwaInstallButton />
-                <ThemeMenuButton />
               </nav>
+              <div className="absolute bottom-4 left-4 right-4">
+                <SidebarFooter />
+              </div>
             </aside>
           </div>
         ) : null}
@@ -187,7 +285,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           className={cn("flex min-w-0 items-center", isCollapsed ? "justify-center" : "flex-1 justify-center pl-9")}
           >
             {isCollapsed ? (
-              <ZacxMark className="h-8 w-8 text-[var(--zacx-brand)] transition-colors" />
+              <SidebarMenuLogo className="h-auto w-11 max-w-11 transition-colors" />
             ) : (
               <ZacxLogo className="h-7 w-auto max-w-[128px] text-[var(--zacx-brand)] transition-colors" />
             )}
@@ -227,12 +325,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
-
-          <ThemeMenuButton compact={isCollapsed} />
         </nav>
 
         <nav className="absolute bottom-5 left-4 right-4 grid gap-2">
-          <PwaInstallButton compact={isCollapsed} />
+          <SidebarFooter compact={isCollapsed} />
         </nav>
       </aside>
 

@@ -22,6 +22,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { optimizeImage } from "@/lib/image-optimizer";
+import { planningEndStatus } from "@/lib/planning-end-status";
 import { supabase } from "@/lib/supabase/client";
 import type { Client } from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
@@ -44,6 +45,10 @@ type ClientDemand = {
   presentations: number;
   visualItems: number;
   total: number;
+};
+type EndingPlanningAlert = {
+  label: string;
+  daysLeft: number;
 };
 
 function slugify(value: string) {
@@ -230,6 +235,7 @@ export function ClientsManager() {
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [clientConfirmAction, setClientConfirmAction] = useState<ClientConfirmAction>(null);
   const [clientDemand, setClientDemand] = useState<Record<string, ClientDemand>>({});
+  const [endingPlanningAlerts, setEndingPlanningAlerts] = useState<Record<string, EndingPlanningAlert>>({});
 
   async function loadClients() {
     setLoading(true);
@@ -250,11 +256,19 @@ export function ClientsManager() {
     setLoading(false);
 
     const [planningResult, presentationResult] = await Promise.all([
-      supabase.from("copy_plannings").select("client_id").is("deleted_at", null),
+      supabase
+        .from("copy_plannings")
+        .select("client_id, end_display_date, period_label, archived_at")
+        .is("deleted_at", null),
       supabase.from("visual_presentations").select("id, client_id").is("deleted_at", null),
     ]);
 
-    const planningRows = (planningResult.data ?? []) as Array<{ client_id: string | null }>;
+    const planningRows = (planningResult.data ?? []) as Array<{
+      client_id: string | null;
+      end_display_date?: string | null;
+      period_label?: string | null;
+      archived_at?: string | null;
+    }>;
     const presentationRows = (presentationResult.data ?? []) as Array<{ id: string; client_id: string | null }>;
     const presentationClientMap = new Map(
       presentationRows
@@ -276,6 +290,25 @@ export function ClientsManager() {
       const demand = ensureDemand(planning.client_id);
       demand.plannings += 1;
       demand.total += 1;
+    });
+
+    const nextEndingAlerts: Record<string, EndingPlanningAlert> = {};
+
+    planningRows.forEach((planning) => {
+      if (!planning.client_id || planning.archived_at) return;
+
+      const status = planningEndStatus(planning.end_display_date, planning.period_label);
+
+      if (!status) return;
+
+      const current = nextEndingAlerts[planning.client_id];
+
+      if (!current || status.daysLeft < current.daysLeft) {
+        nextEndingAlerts[planning.client_id] = {
+          label: status.label,
+          daysLeft: status.daysLeft,
+        };
+      }
     });
 
     presentationRows.forEach((presentation) => {
@@ -308,6 +341,7 @@ export function ClientsManager() {
     }
 
     setClientDemand(nextDemand);
+    setEndingPlanningAlerts(nextEndingAlerts);
   }
 
   useEffect(() => {
@@ -724,14 +758,14 @@ export function ClientsManager() {
       />
 
       <div className="grid gap-4 lg:grid-cols-[150px_minmax(0,1fr)] lg:items-start">
-        <aside className="no-scrollbar flex gap-2 overflow-x-auto pb-1 lg:sticky lg:top-24 lg:flex-col lg:overflow-visible lg:pb-0">
+        <aside className="no-scrollbar flex gap-2 overflow-x-auto pb-1 lg:sticky lg:top-24 lg:flex-col lg:overflow-visible lg:pb-0 lg:pr-2">
           <button
             type="button"
             onClick={() => setResponsibleFilter("all")}
             className={cn(
-              "h-10 shrink-0 rounded-lg border border-border bg-background px-4 text-sm font-medium text-muted-foreground transition-colors hover:border-foreground/25 hover:text-foreground lg:w-full lg:text-left",
+              "h-10 shrink-0 rounded-md border border-border bg-background px-4 text-sm font-medium text-muted-foreground transition-colors hover:border-foreground/25 hover:text-foreground lg:w-full lg:text-left",
               responsibleFilter === "all" &&
-                "border-[#1D10D7]/60 bg-[#1D10D7]/[0.06] text-foreground dark:border-[#DFFF06]/70 dark:bg-[#DFFF06]/10",
+                "border-[#1D10D7]/60 bg-[#1D10D7]/[0.04] text-foreground dark:border-[#DFFF06]/70 dark:bg-[#DFFF06]/[0.08]",
             )}
           >
             Todos
@@ -742,9 +776,9 @@ export function ClientsManager() {
               type="button"
               onClick={() => setResponsibleFilter(responsible)}
               className={cn(
-                "h-10 shrink-0 rounded-lg border border-border bg-background px-4 text-sm font-medium text-muted-foreground transition-colors hover:border-foreground/25 hover:text-foreground lg:w-full lg:text-left",
+                "h-10 shrink-0 rounded-md border border-border bg-background px-4 text-sm font-medium text-muted-foreground transition-colors hover:border-foreground/25 hover:text-foreground lg:w-full lg:text-left",
                 responsibleFilter === responsible &&
-                  "border-[#1D10D7]/60 bg-[#1D10D7]/[0.06] text-foreground dark:border-[#DFFF06]/70 dark:bg-[#DFFF06]/10",
+                  "border-[#1D10D7]/60 bg-[#1D10D7]/[0.04] text-foreground dark:border-[#DFFF06]/70 dark:bg-[#DFFF06]/[0.08]",
               )}
             >
               {responsible}
@@ -818,12 +852,7 @@ export function ClientsManager() {
                   selectionMode={clientSelectionMode}
                   selected={selectedClientIds.includes(client.id)}
                   onToggleSelected={() => toggleClientSelection(client.id)}
-                  onArchiveToggle={() =>
-                    setClientConfirmAction({
-                      kind: client.archived_at ? "unarchive" : "archive",
-                      ids: [client.id],
-                    })
-                  }
+                  endingPlanningLabel={endingPlanningAlerts[client.id]?.label}
                 />
               ))}
             </div>

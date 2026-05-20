@@ -1,4 +1,4 @@
-export type PlanningVisualType = "post" | "carousel" | "stories" | "video";
+export type PlanningVisualType = "post" | "carousel" | "stories" | "video" | "photos" | "traffic";
 
 export type PlanningVisualSubItem = {
   label: string;
@@ -51,6 +51,8 @@ export type PlanningVisualSections = {
   carousels: string;
   stories: string;
   videos: string;
+  photos: string;
+  paidTraffic: string;
 };
 
 type ParsedDate = {
@@ -85,6 +87,8 @@ const sectionOrder: Array<keyof PlanningVisualSections> = [
   "carousels",
   "stories",
   "videos",
+  "photos",
+  "paidTraffic",
 ];
 
 const blockElements = new Set([
@@ -116,7 +120,7 @@ const blockElements = new Set([
 ]);
 
 const typePattern =
-  "POSTS?|CARROSSEL|CARROSSEIS|CARROSSÉIS|STOR(?:Y|IES)|V[IÍ]DEOS?|VIDEOS?|REELS?";
+  "POSTS?|CARROSSEL|CARROSSEIS|CARROSSÉIS|STOR(?:Y|IES)|V[IÍ]DEOS?|VIDEOS?|REELS?|FOTOS?|TR[AÁ]FEGO\\s+PAGO|TRAFEGO\\s+PAGO";
 const flexibleDatePattern =
   "((?:\\d\\s*){1,2}\\/\\s*(?:\\d\\s*){1,2}(?:\\/\\s*(?:\\d\\s*){2,4})?)";
 
@@ -283,6 +287,14 @@ function normalizeType(type: string): { type: PlanningVisualType; typeLabel: str
     normalized === "REELS"
   ) {
     return { type: "video", typeLabel: "VÍDEO" };
+  }
+
+  if (normalized === "FOTO" || normalized === "FOTOS") {
+    return { type: "photos", typeLabel: "FOTOS" };
+  }
+
+  if (normalized === "TRAFEGO PAGO") {
+    return { type: "traffic", typeLabel: "TRÁFEGO PAGO" };
   }
 
   return null;
@@ -1011,6 +1023,8 @@ export function updatePlanningVisualItemInSections(
     carousels: sections.carousels || "",
     stories: sections.stories || "",
     videos: sections.videos || "",
+    photos: sections.photos || "",
+    paidTraffic: sections.paidTraffic || "",
   };
 
   if (!sectionOrder.includes(sectionKey)) {
@@ -1046,6 +1060,8 @@ export function parsePlanningSections(sections: Partial<PlanningVisualSections>)
     carousels: sections.carousels || "",
     stories: sections.stories || "",
     videos: sections.videos || "",
+    photos: sections.photos || "",
+    paidTraffic: sections.paidTraffic || "",
   };
   const allLines = sectionOrder.flatMap((sectionKey) => htmlToPlainLines(normalizedSections[sectionKey]));
   const lineHeaders = allLines.filter(isItemHeader);

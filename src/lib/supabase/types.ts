@@ -29,6 +29,7 @@ export type Client = {
   primary_color: string | null;
   secondary_color?: string | null;
   responsible_name?: ResponsibleName | string | null;
+  sort_order?: number | null;
   archived_at?: string | null;
   deleted_at?: string | null;
   created_at: string | null;
@@ -101,6 +102,8 @@ export type CopyPlanning = {
   title: string;
   public_slug: string;
   period_label: string | null;
+  start_display_date?: string | null;
+  end_display_date?: string | null;
   document_content: string | null;
   status: WeekStatus | string | null;
   is_public: boolean | null;
@@ -195,6 +198,7 @@ export type Database = {
           primary_color?: string | null;
           secondary_color?: string | null;
           responsible_name?: ResponsibleName | string | null;
+          sort_order?: number | null;
           archived_at?: string | null;
           deleted_at?: string | null;
           created_at?: string | null;
@@ -282,6 +286,8 @@ export type Database = {
           title: string;
           public_slug: string;
           period_label?: string | null;
+          start_display_date?: string | null;
+          end_display_date?: string | null;
           document_content?: string | null;
           status?: WeekStatus | string | null;
           is_public?: boolean | null;
@@ -374,7 +380,15 @@ export type Database = {
       >;
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      get_storage_usage_summary: {
+        Args: Record<string, never>;
+        Returns: {
+          used_bytes: number | null;
+          file_count: number | null;
+        }[];
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

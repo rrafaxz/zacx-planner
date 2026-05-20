@@ -208,7 +208,7 @@ function PublicWeekSelection({
             className={cn(
               "min-w-[156px] flex-none rounded-xl border border-dashed bg-background px-3 py-4 text-left transition-colors hover:border-foreground/35 hover:bg-foreground/[0.02] sm:min-w-0 sm:px-4 sm:py-5",
               selectedWeekId === week.id
-                ? "border-[#1D10D7] dark:border-[#DFFF06]"
+                ? "border-[#1D10D7] bg-neutral-900/[0.045] dark:border-[#DFFF06] dark:bg-[#DFFF06]/[0.07]"
                 : "border-border",
             )}
           >

@@ -401,24 +401,29 @@ function AddFormatCard({
           event.currentTarget.value = "";
         }}
       />
-      <div
-        className={cn(
-          "mx-auto grid w-full max-w-[118px] place-items-center rounded-xl border border-dashed border-border bg-background transition-colors group-hover:border-foreground/40",
-          "relative",
-          shapeClass,
-        )}
-      >
-        {format === "carousel" ? (
-          <div className="pointer-events-none absolute inset-0 overflow-hidden">
-            <span className="absolute left-1/2 top-1/2 h-[58%] w-[54%] -translate-x-[96%] -translate-y-1/2 rounded-lg border border-dashed border-foreground/20 bg-background" />
-            <span className="absolute left-1/2 top-1/2 h-[68%] w-[58%] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-dashed border-foreground/35 bg-background" />
-            <span className="absolute left-1/2 top-1/2 h-[58%] w-[54%] -translate-x-[4%] -translate-y-1/2 rounded-lg border border-dashed border-foreground/20 bg-background" />
+      {format === "carousel" ? (
+        <div className={cn("relative mx-auto grid w-full max-w-[118px] place-items-center overflow-visible", shapeClass)}>
+          <span className="pointer-events-none absolute -left-2 top-[13%] z-0 h-[74%] w-[42%] rounded-xl border border-dashed border-foreground/20 bg-background" />
+          <span className="pointer-events-none absolute -right-2 top-[13%] z-0 h-[74%] w-[42%] rounded-xl border border-dashed border-foreground/20 bg-background" />
+          <div className="relative z-10 grid h-full w-[82%] place-items-center rounded-xl border border-dashed border-border bg-background transition-colors group-hover:border-foreground/40">
+            <div className="grid h-11 w-11 place-items-center rounded-full border border-border bg-background text-foreground transition-colors group-hover:border-foreground/40">
+              <Plus className="h-5 w-5" />
+            </div>
           </div>
-        ) : null}
-        <div className="relative z-10 grid h-11 w-11 place-items-center rounded-full border border-border bg-background text-foreground transition-colors group-hover:border-foreground/40">
-          <Plus className="h-5 w-5" />
         </div>
-      </div>
+      ) : (
+        <div
+          className={cn(
+            "mx-auto grid w-full max-w-[118px] place-items-center rounded-xl border border-dashed border-border bg-background transition-colors group-hover:border-foreground/40",
+            "relative",
+            shapeClass,
+          )}
+        >
+          <div className="relative z-10 grid h-11 w-11 place-items-center rounded-full border border-border bg-background text-foreground transition-colors group-hover:border-foreground/40">
+            <Plus className="h-5 w-5" />
+          </div>
+        </div>
+      )}
       <span className="sora-heading mt-3 text-sm font-medium text-foreground">{label}</span>
       <span className="mt-1 text-[11px] text-muted-foreground">{description}</span>
     </label>
@@ -560,7 +565,7 @@ function WeekSelectionGrid({
             className={cn(
               "group relative min-w-[156px] flex-none rounded-xl border border-dashed bg-background text-left transition-colors hover:border-foreground/40 hover:bg-foreground/[0.02] sm:min-w-0",
               isSelected
-                ? "border-[#1D10D7] bg-transparent dark:border-[#DFFF06]"
+                ? "border-[#1D10D7] bg-neutral-900/[0.045] dark:border-[#DFFF06] dark:bg-[#DFFF06]/[0.07]"
                 : "border-border",
             )}
           >
@@ -633,20 +638,58 @@ function VisualPreviewItemSection({
   theme,
   primaryColor,
   secondaryColor,
+  editable = false,
+  onQuickUpdate,
 }: {
   item: VisualItemWithImages;
   client: Client | null;
   theme: "dark" | "light";
   primaryColor: string;
   secondaryColor: string;
+  editable?: boolean;
+  onQuickUpdate?: (
+    item: VisualItemWithImages,
+    values: { displayDate?: string; weekday?: string; imageId?: string | null; imageIndex?: number },
+  ) => Promise<void> | void;
 }) {
   const [activeImage, setActiveImage] = useState<VisualArtworkImage | null>(null);
   const format = visualFormatFromValue(item.format);
   const displayDate = format === "stories" ? activeImage?.display_date || item.display_date : item.display_date;
   const weekday = format === "stories" ? activeImage?.weekday || item.weekday : item.weekday;
+  const [dateDraft, setDateDraft] = useState(formatDateInput(displayDate || ""));
   const [dateDay, dateMonth] = (displayDate || "--/--").split("/");
   const primaryTextColor = textColorForBackground(primaryColor);
   const secondaryTextColor = textColorForBackground(secondaryColor);
+  const sortedImages = sortImagesByOrder(item.images);
+  const activeImageIndex = activeImage?.id ? sortedImages.findIndex((image) => image.id === activeImage.id) : 0;
+
+  useEffect(() => {
+    setDateDraft(formatDateInput(displayDate || ""));
+  }, [displayDate]);
+
+  function saveDateDraft() {
+    if (!editable || !onQuickUpdate) return;
+
+    const normalizedDate = formatDateInput(dateDraft);
+
+    if (!normalizedDate) return;
+
+    onQuickUpdate(item, {
+      displayDate: normalizedDate,
+      imageId: format === "stories" ? activeImage?.id : null,
+      imageIndex: format === "stories" ? Math.max(activeImageIndex, 0) : undefined,
+    });
+  }
+
+  function saveWeekday(nextWeekday: string) {
+    if (!editable || !onQuickUpdate) return;
+
+    onQuickUpdate(item, {
+      weekday: nextWeekday,
+      imageId: format === "stories" ? activeImage?.id : null,
+      imageIndex: format === "stories" ? Math.max(activeImageIndex, 0) : undefined,
+    });
+  }
 
   return (
     <section className="space-y-5 md:space-y-10">
@@ -655,14 +698,47 @@ function VisualPreviewItemSection({
           className="flex h-12 items-center justify-center rounded-lg px-3 text-sm font-medium sm:h-14 md:text-base"
           style={{ backgroundColor: primaryColor, color: primaryTextColor }}
         >
-          <span>{dateDay || "--"}</span>
-          <span className="opacity-65">/{dateMonth || "--"}</span>
+          {editable ? (
+            <input
+              value={dateDraft}
+              onChange={(event) => setDateDraft(formatDateInput(event.target.value))}
+              onBlur={saveDateDraft}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  event.currentTarget.blur();
+                }
+              }}
+              className="h-9 w-20 rounded-md border border-white/30 bg-transparent px-2 text-center text-sm font-medium outline-none"
+              aria-label="Editar data"
+            />
+          ) : (
+            <>
+              <span>{dateDay || "--"}</span>
+              <span className="opacity-65">/{dateMonth || "--"}</span>
+            </>
+          )}
         </div>
         <div
           className="flex h-12 items-center justify-center rounded-lg px-3 text-center text-xs font-medium uppercase sm:h-14 sm:text-sm md:text-base"
           style={{ backgroundColor: secondaryColor, color: secondaryTextColor }}
         >
-          {fullWeekday(weekday).toUpperCase()}
+          {editable ? (
+            <select
+              value={normalizeWeekdayValue(weekday)}
+              onChange={(event) => saveWeekday(event.target.value)}
+              className="h-9 rounded-md border border-white/30 bg-transparent px-2 text-center text-xs font-medium uppercase outline-none"
+              aria-label="Editar dia"
+            >
+              {weekdays.map((weekdayOption) => (
+                <option key={weekdayOption} value={weekdayOption}>
+                  {fullWeekday(weekdayOption).toUpperCase()}
+                </option>
+              ))}
+            </select>
+          ) : (
+            fullWeekday(weekday).toUpperCase()
+          )}
         </div>
       </div>
       <VisualItemBoard
@@ -2585,6 +2661,8 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
                     theme={theme}
                     primaryColor={primaryColor}
                     secondaryColor={secondaryColor}
+                    editable
+                    onQuickUpdate={handleQuickUpdate}
                   />
                 ))}
               </div>
@@ -3164,7 +3242,7 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
                 "relative transition-transform duration-150 ease-out",
                 itemSelectionMode ? "cursor-default" : "cursor-grab active:cursor-grabbing",
 	                isSelected &&
-	                  "rounded-2xl border border-blue-400 bg-blue-500/[0.06] p-1 dark:border-blue-400/60 dark:bg-blue-400/10",
+	                  "rounded-2xl border border-blue-400 bg-neutral-900/[0.045] p-1 dark:border-blue-400/60 dark:bg-white/[0.06]",
                 visualItemDrag?.itemId === item.id && "scale-[1.01] shadow-sm shadow-black/10",
                 reorderingItemId === item.id && "opacity-75",
               )}

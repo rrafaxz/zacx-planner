@@ -9,9 +9,11 @@ import {
   FileText,
   Images,
   Layers3,
+  Loader2,
   Plus,
   Settings2,
   Trophy,
+  Upload,
   UsersRound,
 } from "lucide-react";
 
@@ -19,6 +21,8 @@ import { ClientAvatarDisplay } from "@/components/clients/client-detail";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { optimizeImage } from "@/lib/image-optimizer";
+import { extractEndDisplayDate, planningEndStatus } from "@/lib/planning-end-status";
 import { supabase } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -36,6 +40,10 @@ type DashboardClient = {
 type DashboardDeliverable = {
   id: string;
   client_id: string | null;
+  title?: string | null;
+  period_label?: string | null;
+  start_display_date?: string | null;
+  end_display_date?: string | null;
   created_at: string | null;
   archived_at?: string | null;
   deleted_at?: string | null;
@@ -103,6 +111,16 @@ function normalizeFormat(format?: string | null) {
   if (value.includes("carousel") || value.includes("carrossel")) return "carousel";
 
   return "post";
+}
+
+function safeStorageFileName(fileName: string) {
+  const name = fileName.split(/[/\\]/).pop() || "logo";
+
+  return name.replace(/[^a-zA-Z0-9._-]/g, "-") || "logo";
+}
+
+function isImageFile(file: File) {
+  return file.type.startsWith("image/");
 }
 
 function lastSixMonthLabels() {
@@ -218,6 +236,8 @@ export function AdminDashboard() {
     status: "all",
   });
   const [savingResponsibleId, setSavingResponsibleId] = useState<string | null>(null);
+  const [savingClientNameId, setSavingClientNameId] = useState<string | null>(null);
+  const [uploadingLogoId, setUploadingLogoId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -235,7 +255,7 @@ export function AdminDashboard() {
           .order("name", { ascending: true }),
         supabase
           .from("copy_plannings")
-          .select("id, client_id, created_at, archived_at, deleted_at"),
+          .select("id, client_id, title, period_label, start_display_date, end_display_date, created_at, archived_at, deleted_at"),
         supabase
           .from("visual_presentations")
           .select("id, client_id, created_at, archived_at, deleted_at"),
@@ -385,6 +405,22 @@ export function AdminDashboard() {
     });
   }, [data]);
 
+  const endingPlannings = useMemo(() => {
+    return data.copyPlannings
+      .filter((planning) => !planning.archived_at && !planning.deleted_at)
+      .map((planning) => ({
+        planning,
+        client: planning.client_id ? maps.clientsById.get(planning.client_id) : null,
+        status: planningEndStatus(planning.end_display_date, planning.period_label),
+      }))
+      .filter((item): item is {
+        planning: DashboardDeliverable;
+        client: DashboardClient | null;
+        status: NonNullable<ReturnType<typeof planningEndStatus>>;
+      } => Boolean(item.status))
+      .sort((left, right) => left.status.daysLeft - right.status.daysLeft);
+  }, [data.copyPlannings, maps.clientsById]);
+
   async function updateClientResponsible(clientId: string, responsibleName: string) {
     setSavingResponsibleId(clientId);
     setError(null);
@@ -408,6 +444,83 @@ export function AdminDashboard() {
     }
 
     setSavingResponsibleId(null);
+  }
+
+  async function updateClientName(clientId: string, nextName: string) {
+    const cleanName = nextName.trim();
+    const currentClient = data.clients.find((client) => client.id === clientId);
+
+    if (!currentClient || !cleanName || cleanName === currentClient.name) return;
+
+    setSavingClientNameId(clientId);
+    setError(null);
+
+    const { error: requestError } = await supabase
+      .from("clients")
+      .update({ name: cleanName } as never)
+      .eq("id", clientId);
+
+    if (requestError) {
+      setError(requestError.message);
+    } else {
+      setData((current) => ({
+        ...current,
+        clients: current.clients.map((client) =>
+          client.id === clientId ? { ...client, name: cleanName } : client,
+        ),
+      }));
+      setMessage("Cliente atualizado.");
+      window.setTimeout(() => setMessage(null), 1800);
+    }
+
+    setSavingClientNameId(null);
+  }
+
+  async function uploadClientLogo(client: DashboardClient, file: File) {
+    if (!isImageFile(file)) {
+      setError("Selecione uma imagem valida.");
+      return;
+    }
+
+    setUploadingLogoId(client.id);
+    setError(null);
+
+    try {
+      const optimizedLogo = await optimizeImage(file, "client-logo");
+      const storagePath = `${client.id}/${Date.now()}-${safeStorageFileName(optimizedLogo.name)}`;
+      const { error: uploadError } = await supabase.storage
+        .from("client-logos")
+        .upload(storagePath, optimizedLogo, {
+          contentType: optimizedLogo.type || undefined,
+          upsert: false,
+        });
+
+      if (uploadError) throw new Error(uploadError.message);
+
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("client-logos").getPublicUrl(storagePath);
+
+      const { error: updateError } = await supabase
+        .from("clients")
+        .update({ logo_url: publicUrl } as never)
+        .eq("id", client.id);
+
+      if (updateError) throw new Error(updateError.message);
+
+      setData((current) => ({
+        ...current,
+        clients: current.clients.map((currentClient) =>
+          currentClient.id === client.id ? { ...currentClient, logo_url: publicUrl } : currentClient,
+        ),
+      }));
+      setMessage("Foto do cliente atualizada.");
+      window.setTimeout(() => setMessage(null), 1800);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel atualizar a foto.");
+    } finally {
+      setUploadingLogoId(null);
+    }
   }
 
   const activePlannings = filtered.copyPlannings.filter((planning) => !planning.archived_at).length;
@@ -483,11 +596,12 @@ export function AdminDashboard() {
       ) : null}
 
       <Tabs defaultValue="graficos" className="space-y-5">
-        <TabsList className="grid h-auto w-full grid-cols-3 gap-2 border-0 bg-transparent p-0 sm:w-auto sm:inline-grid">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-2 border-0 bg-transparent p-0 sm:w-auto sm:grid-cols-4 sm:inline-grid">
           {[
             { value: "graficos", label: "Gráficos", icon: BarChart3 },
             { value: "configuracoes", label: "Configurações", icon: Settings2 },
             { value: "ranking", label: "Ranking", icon: Trophy },
+            { value: "planejamentos-no-fim", label: "Planejamentos no fim", icon: FileText },
           ].map((tab) => {
             const Icon = tab.icon;
 
@@ -581,6 +695,74 @@ export function AdminDashboard() {
           </div>
         </TabsContent>
 
+        <TabsContent value="planejamentos-no-fim" className="space-y-5">
+          <Card className="border-border/70 bg-background shadow-none">
+            <CardHeader>
+              <CardTitle className="sora-heading text-lg">Planejamentos próximos do fim</CardTitle>
+              <CardDescription>
+                Entram aqui planejamentos com 10 dias ou menos até a data final.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {endingPlannings.length ? (
+                endingPlannings.map(({ planning, client, status }) => {
+                  const toneClass =
+                    status.tone === "expired"
+                      ? "border-neutral-400 bg-neutral-500/10 text-neutral-700 dark:text-neutral-200"
+                      : status.tone === "today"
+                        ? "border-red-500 bg-red-500/10 text-red-600 dark:text-red-300"
+                        : status.tone === "critical"
+                          ? "border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-300"
+                          : "border-amber-400 bg-amber-400/10 text-amber-700 dark:text-amber-200";
+
+                  return (
+                    <Link
+                      key={planning.id}
+                      href={`/admin/planejamentos/${planning.id}`}
+                      className="block rounded-xl border border-border bg-background p-4 transition hover:-translate-y-0.5 hover:border-foreground/25"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <div className="flex min-w-0 flex-1 items-center gap-3">
+                          <ClientAvatarDisplay
+                            name={client?.name || "Cliente"}
+                            logoUrl={client?.logo_url || null}
+                            accentColor={client?.primary_color || "#E5E7EB"}
+                            className="h-11 w-11 text-base"
+                          />
+                          <div className="min-w-0">
+                            <p className="sora-heading truncate text-sm font-medium text-foreground">
+                              {planning.title || "Planejamento"}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {client?.name || "Cliente"} · {planning.period_label || "Período não definido"}
+                            </p>
+                          </div>
+                        </div>
+                        <span className={cn("inline-flex w-fit rounded-full border px-3 py-1 text-xs font-medium", toneClass)}>
+                          {status.label}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-xs text-muted-foreground">
+                        Data final: {extractEndDisplayDate(planning.end_display_date, planning.period_label) || "não definida"}
+                      </p>
+                      <div className="mt-4 h-2 overflow-hidden rounded-full bg-foreground/[0.08]">
+                        <span
+                          className="block h-full rounded-full bg-red-500"
+                          style={{ width: `${status.tone === "expired" ? 100 : Math.max(8, status.progress)}%` }}
+                        />
+                      </div>
+                    </Link>
+                  );
+                })
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Nenhum planejamento acabando nos próximos 10 dias.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="configuracoes" className="space-y-5">
           <div className="grid gap-4 lg:grid-cols-3">
             {responsibleGroups.map((group) => (
@@ -603,14 +785,52 @@ export function AdminDashboard() {
               <Card key={client.id} className="bg-background shadow-none">
                 <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
                   <div className="flex min-w-0 flex-1 items-center gap-3">
-                    <ClientAvatarDisplay
-                      name={client.name}
-                      logoUrl={client.logo_url}
-                      accentColor={client.primary_color || "#E5E7EB"}
-                      className="h-11 w-11 text-base"
-                    />
+                    <label
+                      className="group relative block shrink-0 cursor-pointer"
+                      aria-label={`Trocar foto de ${client.name}`}
+                      title="Trocar foto"
+                    >
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="sr-only"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          event.currentTarget.value = "";
+                          if (file) uploadClientLogo(client, file);
+                        }}
+                      />
+                      <ClientAvatarDisplay
+                        name={client.name}
+                        logoUrl={client.logo_url}
+                        accentColor={client.primary_color || "#E5E7EB"}
+                        className="h-11 w-11 text-base"
+                      />
+                      <span className="absolute inset-0 grid place-items-center rounded-full bg-black/0 text-white opacity-0 transition group-hover:bg-black/35 group-hover:opacity-100">
+                        {uploadingLogoId === client.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Upload className="h-4 w-4" />
+                        )}
+                      </span>
+                    </label>
                     <div className="min-w-0">
-                      <h3 className="sora-heading truncate text-sm font-medium text-foreground">{client.name}</h3>
+                      <input
+                        defaultValue={client.name}
+                        disabled={savingClientNameId === client.id}
+                        onBlur={(event) => updateClientName(client.id, event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            event.currentTarget.blur();
+                          }
+                          if (event.key === "Escape") {
+                            event.currentTarget.value = client.name;
+                            event.currentTarget.blur();
+                          }
+                        }}
+                        className="sora-heading block w-full rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm font-medium text-foreground outline-none transition hover:border-border focus:border-foreground/30"
+                      />
                       <p className="text-xs text-muted-foreground">
                         {client.responsible_name ? `Responsável: ${client.responsible_name}` : "Sem responsável"}
                       </p>

@@ -150,7 +150,7 @@ function VisualDetailBlock({
   const canCopy = Boolean(copyText?.trim() && onCopy);
 
   return (
-    <div className="rounded-2xl border border-border/70 bg-background p-4">
+    <div className="rounded-2xl border border-border bg-background p-4 ring-1 ring-foreground/[0.03]">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="h-2 w-2 rounded-full" style={{ backgroundColor: accentColor }} />
@@ -429,14 +429,14 @@ export function PlanningVisualBoard({
           style={{ backgroundColor: overlayColor }}
         >
           <div
-            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border/70 bg-background p-4 shadow-none md:p-6"
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-foreground/20 bg-background p-4 shadow-none md:p-6"
             onClick={(event) => event.stopPropagation()}
             style={{ fontFamily: "var(--font-sora), Sora, var(--font-poppins), Poppins, sans-serif" }}
           >
               <div className="flex items-start justify-between gap-4 border-b border-border/70 pb-5">
               <div>
                 <p
-                  className="inline-flex rounded-xl px-3 py-2 text-sm font-medium uppercase tracking-normal"
+                  className="inline-flex rounded-xl border border-foreground/20 px-3 py-2 text-sm font-medium uppercase tracking-normal"
                   style={{ backgroundColor: selectedColors.surface, color: selectedColors.text }}
                 >
                   {displayWeekday(selectedItem)
@@ -535,7 +535,10 @@ export function PlanningVisualBoard({
                     )}
                   </VisualDetailBlock>
 
-                  {selectedItem.type === "post" || selectedItem.type === "video" ? (
+                  {selectedItem.type === "post" ||
+                  selectedItem.type === "video" ||
+                  selectedItem.type === "photos" ||
+                  selectedItem.type === "traffic" ? (
                     <VisualDetailBlock
                       label="Tema"
                       accentColor={selectedColors.detail}
