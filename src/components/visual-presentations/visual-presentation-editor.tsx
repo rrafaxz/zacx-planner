@@ -35,12 +35,18 @@ import {
   storyImageMetadata,
 } from "@/components/visual-presentations/story-image-notes";
 import {
+  applyAutomaticVisualPresentationRange,
+  buildVisualPresentationSlugBaseFromRange,
+  buildVisualPresentationTitleFromRange,
   buildVisualPresentationWeeks,
   buildVisualPresentationWeekNotes,
   dateLabelForWeekOffset,
   filterVisualItemsForWeek,
-  isDayMonthInVisualWeek,
+  getVisualPresentationDateRange,
+  visualPresentationDateRangeFromPresentation,
+  visualPresentationPreferredSlug,
   visualPresentationWeekNotesFromText,
+  type VisualPresentationDateRange,
   type VisualPresentationWeek,
 } from "@/components/visual-presentations/visual-presentation-weeks";
 import { useTheme } from "@/components/theme/theme-provider";
@@ -48,6 +54,7 @@ import { formatDateInput, getDayMonthInputError } from "@/lib/date-mask";
 import { optimizeImage } from "@/lib/image-optimizer";
 import { supabase } from "@/lib/supabase/client";
 import type { Client, VisualItemImage, VisualPresentation } from "@/lib/supabase/types";
+import { resolveUniquePublicSlug } from "@/lib/unique-public-slug";
 import { cn } from "@/lib/utils";
 
 type VisualPresentationEditorProps = {
@@ -888,6 +895,89 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
     setSelectedItemIds([]);
   }, [selectedWeekId, editorMode]);
 
+  async function syncPresentationAutomaticRangeFor(
+    sourcePresentation: VisualPresentation,
+    sourceItems: VisualItemWithImages[],
+    sourceClient: Client | null = client,
+  ) {
+    const range = getVisualPresentationDateRange(sourceItems);
+
+    if (!range) {
+      return sourcePresentation;
+    }
+
+    const clientName = sourceClient?.name || client?.name || "Cliente";
+    const currentRange = visualPresentationDateRangeFromPresentation(sourcePresentation);
+    const currentBaseSlug = buildVisualPresentationSlugBaseFromRange(clientName, currentRange);
+    const nextBaseSlug = buildVisualPresentationSlugBaseFromRange(clientName, range);
+    const preferredCandidate = visualPresentationPreferredSlug(
+      sourcePresentation.public_slug,
+      currentBaseSlug,
+      nextBaseSlug,
+    );
+    const nextTitle = buildVisualPresentationTitleFromRange(clientName, range);
+    const nextSlug = await resolveUniquePublicSlug("visual_presentations", nextBaseSlug, {
+      excludeId: sourcePresentation.id,
+      preferredCandidate,
+    });
+    const nextPresentation = {
+      ...sourcePresentation,
+      title: nextTitle,
+      public_slug: nextSlug,
+      period_label: range.periodLabel,
+      start_display_date: range.startLabel,
+      end_display_date: range.endLabel,
+    };
+    const hasChanges =
+      sourcePresentation.title !== nextTitle ||
+      sourcePresentation.public_slug !== nextSlug ||
+      sourcePresentation.period_label !== range.periodLabel ||
+      sourcePresentation.start_display_date !== range.startLabel ||
+      sourcePresentation.end_display_date !== range.endLabel;
+
+    if (!hasChanges) {
+      return nextPresentation;
+    }
+
+    const { data, error: updateError } = await supabase
+      .from("visual_presentations")
+      .update({
+        title: nextTitle,
+        public_slug: nextSlug,
+        period_label: range.periodLabel,
+        start_display_date: range.startLabel,
+        end_display_date: range.endLabel,
+        updated_at: new Date().toISOString(),
+      } as never)
+      .eq("id", sourcePresentation.id)
+      .select("*")
+      .maybeSingle();
+
+    if (updateError) {
+      setError(updateError.message);
+      return nextPresentation;
+    }
+
+    return (data as VisualPresentation | null) ?? nextPresentation;
+  }
+
+  async function syncPresentationAutomaticRange(nextItems: VisualItemWithImages[], range?: VisualPresentationDateRange | null) {
+    if (!presentation) return null;
+
+    const sourceRange = range ?? getVisualPresentationDateRange(nextItems);
+
+    if (!sourceRange) return presentation;
+
+    const syncedPresentation = await syncPresentationAutomaticRangeFor(
+      presentation,
+      nextItems,
+      client,
+    );
+
+    setPresentation(syncedPresentation);
+    return syncedPresentation;
+  }
+
   async function loadPresentation() {
     setLoading(true);
     setError(null);
@@ -946,9 +1036,20 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
       itemImages = imageData ?? [];
     }
 
-    setPresentation(presentationData);
+    const mappedItems = mapImagesToItems(itemData, itemImages);
+    const syncedPresentation = await syncPresentationAutomaticRangeFor(
+      presentationData,
+      mappedItems,
+      clientResult.data,
+    );
+
+    setPresentation(applyAutomaticVisualPresentationRange(
+      syncedPresentation,
+      mappedItems,
+      clientResult.data?.name || "Cliente",
+    ));
     setClient(clientResult.data);
-    setItems(mapImagesToItems(itemData, itemImages));
+    setItems(mappedItems);
     setLoading(false);
   }
 
@@ -999,6 +1100,7 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
     if (firstError) {
       setError(firstError.message);
     } else {
+      await syncPresentationAutomaticRange(snapshot);
       setNotice("Ultima alteracao desfeita.");
     }
 
@@ -1056,39 +1158,18 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
   }
 
   function selectedWeekDateError(date: string, label = "Essa data") {
-    if (!selectedWeek || isDayMonthInVisualWeek(date, selectedWeek)) return "";
+    void date;
+    void label;
 
-    return `${label} pertence a outra semana.`;
+    return "";
   }
 
   function validateFormDatesForSelectedWeek() {
-    if (!selectedWeek) return "";
-
-    if (form.format === "stories") {
-      const outsideStoryIndex = form.storyImages.findIndex(
-        (story) => !isDayMonthInVisualWeek(story.date, selectedWeek),
-      );
-
-      return outsideStoryIndex >= 0
-        ? `A data do Story ${outsideStoryIndex + 1} pertence a outra semana.`
-        : "";
-    }
-
     return selectedWeekDateError(form.date);
   }
 
   function validateEditDatesForSelectedWeek() {
-    if (!selectedWeek || !editForm) return "";
-
-    if (editForm.format === "stories") {
-      const outsideStoryIndex = editForm.imageDrafts.findIndex(
-        (draft) => !isDayMonthInVisualWeek(draft.date, selectedWeek),
-      );
-
-      return outsideStoryIndex >= 0
-        ? `A data do Story ${outsideStoryIndex + 1} pertence a outra semana.`
-        : "";
-    }
+    if (!editForm) return "";
 
     return selectedWeekDateError(editForm.date);
   }
@@ -2080,18 +2161,19 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
         return;
       }
 
-      setItems((currentItems) =>
-        currentItems.map((currentItem) =>
-          currentItem.id === item.id
-            ? {
-                ...currentItem,
-                notes,
-                display_date: firstMetadata?.displayDate ?? currentItem.display_date,
-                weekday: firstMetadata?.weekday ?? currentItem.weekday,
-              }
-            : currentItem,
-        ),
+      const nextItems = items.map((currentItem) =>
+        currentItem.id === item.id
+          ? {
+              ...currentItem,
+              notes,
+              display_date: firstMetadata?.displayDate ?? currentItem.display_date,
+              weekday: firstMetadata?.weekday ?? currentItem.weekday,
+            }
+          : currentItem,
       );
+
+      setItems(nextItems);
+      await syncPresentationAutomaticRange(nextItems);
       return;
     }
 
@@ -2109,17 +2191,18 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
       return;
     }
 
-    setItems((currentItems) =>
-      currentItems.map((currentItem) =>
-        currentItem.id === item.id
-          ? {
-              ...currentItem,
-              display_date: updatePayload.display_date,
-              weekday: updatePayload.weekday,
-            }
-          : currentItem,
-      ),
+    const nextItems = items.map((currentItem) =>
+      currentItem.id === item.id
+        ? {
+            ...currentItem,
+            display_date: updatePayload.display_date,
+            weekday: updatePayload.weekday,
+          }
+        : currentItem,
     );
+
+    setItems(nextItems);
+    await syncPresentationAutomaticRange(nextItems);
   }
 
   async function persistItemOrder(nextItems: VisualItemWithImages[]) {

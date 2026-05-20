@@ -35,7 +35,6 @@ type PlanningVisualBoardProps = {
 
 const defaultAccent = "#DFFF06";
 const weekdayOptions = ["SEGUNDA", "TERÇA", "QUARTA", "QUINTA", "SEXTA", "SÁBADO", "DOMINGO"];
-const formatOptions = ["POST", "CARROSSEL", "STORIES", "VÍDEO", "FOTOS", "TRÁFEGO PAGO"];
 
 function useBodyScrollLock(locked: boolean) {
   useEffect(() => {
@@ -515,7 +514,7 @@ export function PlanningVisualBoard({
 
               {isEditing && draft ? (
                 <VisualDetailBlock label="Dados do card" accentColor={selectedColors.detail}>
-                  <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
                     <label className="grid gap-1.5 text-xs font-medium uppercase text-muted-foreground">
                       Data
                       <input
@@ -540,22 +539,6 @@ export function PlanningVisualBoard({
                         {weekdayOptions.map((weekday) => (
                           <option key={weekday} value={weekday}>
                             {weekday}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="grid gap-1.5 text-xs font-medium uppercase text-muted-foreground">
-                      Formato
-                      <select
-                        value={draft.typeLabel}
-                        onChange={(event) =>
-                          setDraft((current) => (current ? { ...current, typeLabel: event.target.value } : current))
-                        }
-                        className={modalInputClass(false)}
-                      >
-                        {formatOptions.map((format) => (
-                          <option key={format} value={format}>
-                            {format}
                           </option>
                         ))}
                       </select>

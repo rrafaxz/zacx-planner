@@ -1,4 +1,4 @@
-import { formatDateInput, isValidDayMonth } from "@/lib/date-mask";
+import { dateWithDots, formatDateInput, isValidDayMonth } from "@/lib/date-mask";
 import type { VisualPresentation } from "@/lib/supabase/types";
 
 import { storyImageMetadata } from "./story-image-notes";
@@ -22,6 +22,14 @@ export type VisualPresentationWeekOverride = {
   endLabel?: string;
 };
 
+export type VisualPresentationDateRange = {
+  startLabel: string;
+  endLabel: string;
+  startDate: Date;
+  endDate: Date;
+  periodLabel: string;
+};
+
 type VisualPresentationWeekNotesPayload = {
   clientNotes: string | null;
   weekOverrides: Record<string, VisualPresentationWeekOverride>;
@@ -30,6 +38,70 @@ type VisualPresentationWeekNotesPayload = {
 const referenceYear = 2026;
 const dayInMs = 24 * 60 * 60 * 1000;
 const weekNotesPayloadVersion = 1;
+
+function slugify(value: string) {
+  const normalizedValue = value.trim() || "sem-titulo";
+
+  return normalizedValue
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function clientNameForPresentationTitle(clientName: string) {
+  return clientName.trim().toUpperCase() || "CLIENTE";
+}
+
+export function buildVisualPresentationTitleFromRange(
+  clientName: string,
+  range?: Pick<VisualPresentationDateRange, "startLabel" | "endLabel"> | null,
+) {
+  const clientLabel = clientNameForPresentationTitle(clientName);
+
+  if (!range?.startLabel || !range.endLabel) {
+    return `AP ${clientLabel}`;
+  }
+
+  return `AP ${clientLabel} ${dateWithDots(range.startLabel)}-${dateWithDots(range.endLabel)}`;
+}
+
+export function buildVisualPresentationSlugBaseFromRange(
+  clientName: string,
+  range?: Pick<VisualPresentationDateRange, "startLabel" | "endLabel"> | null,
+) {
+  return slugify(buildVisualPresentationTitleFromRange(clientName, range));
+}
+
+export function visualPresentationPreferredSlug(
+  currentSlug: string,
+  currentBaseSlug: string,
+  nextBaseSlug: string,
+) {
+  const normalizedCurrentSlug = currentSlug.trim().replace(/-+/g, "-").replace(/^-+|-+$/g, "");
+  const normalizedCurrentBase = currentBaseSlug.trim().replace(/-+/g, "-").replace(/^-+|-+$/g, "");
+  const normalizedNextBase = nextBaseSlug.trim().replace(/-+/g, "-").replace(/^-+|-+$/g, "");
+
+  if (!normalizedCurrentSlug || !normalizedNextBase) {
+    return normalizedNextBase;
+  }
+
+  if (normalizedCurrentSlug === normalizedCurrentBase) {
+    return normalizedNextBase;
+  }
+
+  if (normalizedCurrentBase && normalizedCurrentSlug.startsWith(`${normalizedCurrentBase}-`)) {
+    const suffix = normalizedCurrentSlug.slice(normalizedCurrentBase.length + 1);
+
+    if (/^\d+$/.test(suffix)) {
+      return `${normalizedNextBase}-${suffix}`;
+    }
+  }
+
+  return normalizedNextBase;
+}
 
 export function visualPresentationWeekNotesFromText(value?: string | null): VisualPresentationWeekNotesPayload {
   if (!value) {
@@ -307,6 +379,85 @@ function imageDate(item: VisualItemWithImages, imageIndex: number, imageId?: str
     fallbackDate: item.display_date,
     fallbackWeekday: item.weekday,
   }).displayDate;
+}
+
+export function visualPresentationDateRangeFromPresentation(
+  presentation: VisualPresentation,
+): VisualPresentationDateRange | null {
+  const range = dateRangeFromPresentation(presentation);
+
+  if (!range) return null;
+
+  const startLabel = formatDayMonth(range.startDate);
+  const endLabel = formatDayMonth(range.endDate);
+
+  return {
+    startLabel,
+    endLabel,
+    startDate: range.startDate,
+    endDate: range.endDate,
+    periodLabel: `${startLabel} a ${endLabel}`,
+  };
+}
+
+export function getVisualPresentationDateRange(items: VisualItemWithImages[]): VisualPresentationDateRange | null {
+  const dates = items.flatMap((item) => {
+    const mode = itemMode(item);
+
+    if (mode !== "stories") {
+      const date = parseDayMonth(item.display_date);
+
+      return date ? [date] : [];
+    }
+
+    const images = [...(item.images ?? [])].sort(
+      (left, right) =>
+        (left.order_index ?? 0) - (right.order_index ?? 0) ||
+        `${left.created_at ?? ""}`.localeCompare(`${right.created_at ?? ""}`),
+    );
+
+    const storyDates = images
+      .map((image, index) => parseDayMonth(imageDate(item, index, image.id, image.order_index)))
+      .filter((date): date is Date => Boolean(date));
+    const itemDate = parseDayMonth(item.display_date);
+
+    return storyDates.length ? storyDates : itemDate ? [itemDate] : [];
+  });
+
+  if (!dates.length) return null;
+
+  const startDate = dates.reduce((currentStart, date) => minDate(currentStart, date), dates[0]);
+  const endDate = dates.reduce((currentEnd, date) => maxDate(currentEnd, date), dates[0]);
+  const startLabel = formatDayMonth(startDate);
+  const endLabel = formatDayMonth(endDate);
+
+  return {
+    startLabel,
+    endLabel,
+    startDate,
+    endDate,
+    periodLabel: `${startLabel} a ${endLabel}`,
+  };
+}
+
+export function applyAutomaticVisualPresentationRange(
+  presentation: VisualPresentation,
+  items: VisualItemWithImages[],
+  clientName = "Cliente",
+) {
+  const range = getVisualPresentationDateRange(items);
+
+  if (!range) {
+    return presentation;
+  }
+
+  return {
+    ...presentation,
+    title: buildVisualPresentationTitleFromRange(clientName, range),
+    period_label: range.periodLabel,
+    start_display_date: range.startLabel,
+    end_display_date: range.endLabel,
+  };
 }
 
 export function filterVisualItemsForWeek(

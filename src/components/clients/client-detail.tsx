@@ -31,7 +31,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  dateWithDots,
   formatDateInput,
   getDayMonthInputError,
   getMonthNameFromDayMonth,
@@ -39,9 +38,18 @@ import {
 } from "@/lib/date-mask";
 import { optimizeImage } from "@/lib/image-optimizer";
 import { supabase } from "@/lib/supabase/client";
-import type { Client, CopyPlanning, VisualPresentation } from "@/lib/supabase/types";
+import type { Client, CopyPlanning, VisualItem, VisualItemImage, VisualPresentation } from "@/lib/supabase/types";
 import { resolveUniquePublicSlug } from "@/lib/unique-public-slug";
 import { cn, formatDateBR } from "@/lib/utils";
+import {
+  applyAutomaticVisualPresentationRange,
+  buildVisualPresentationSlugBaseFromRange,
+  buildVisualPresentationTitleFromRange,
+  getVisualPresentationDateRange,
+  visualPresentationDateRangeFromPresentation,
+  visualPresentationPreferredSlug,
+} from "@/components/visual-presentations/visual-presentation-weeks";
+import type { VisualItemWithImages } from "@/components/visual-presentations/visual-item-board";
 
 type ClientDetailProps = {
   clientId: string;
@@ -96,11 +104,16 @@ type VisualItemThumbnailRow = {
   id: string;
   visual_presentation_id: string;
   image_url: string | null;
+  display_date: string | null;
+  format: string | null;
+  weekday: string | null;
+  notes: string | null;
   order_index: number | null;
   created_at: string | null;
 };
 
 type VisualItemImageThumbnailRow = {
+  id: string;
   visual_item_id: string;
   image_url: string | null;
   order_index: number | null;
@@ -198,14 +211,14 @@ function clientNameForTitle(clientName: string) {
 }
 
 function buildPresentationTitle(clientName: string, startDate: string, endDate: string) {
-  const startDateLabel = dateWithDots(startDate);
-  const endDateLabel = dateWithDots(endDate);
-  const dateRange =
-    isValidDayMonth(startDate) && isValidDayMonth(endDate)
-      ? `${startDateLabel}-${endDateLabel}`
-      : `${startDateLabel} - ${endDateLabel}`;
+  if (!isValidDayMonth(startDate) || !isValidDayMonth(endDate)) {
+    return buildVisualPresentationTitleFromRange(clientName);
+  }
 
-  return `AP ${clientNameForTitle(clientName)} ${dateRange}`;
+  return buildVisualPresentationTitleFromRange(clientName, {
+    startLabel: startDate,
+    endLabel: endDate,
+  });
 }
 
 function buildPlanningTitle(clientName: string, startDate: string) {
@@ -745,18 +758,18 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
 
-  async function loadVisualThumbnails(presentations: VisualPresentation[]) {
+  async function loadVisualThumbnails(presentations: VisualPresentation[], clientName?: string | null) {
     const presentationIds = presentations.map((presentation) => presentation.id);
 
     if (!presentationIds.length) {
       setVisualThumbnails({});
       setVisualArtCounts({});
-      return;
+      return presentations;
     }
 
     const { data: itemData } = await supabase
       .from("visual_items")
-      .select("id, visual_presentation_id, image_url, order_index, created_at")
+      .select("id, visual_presentation_id, image_url, display_date, format, weekday, notes, order_index, created_at")
       .in("visual_presentation_id", presentationIds)
       .order("order_index", { ascending: true })
       .order("created_at", { ascending: true });
@@ -769,6 +782,8 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
     }, {});
     const itemPresentationMap = new Map<string, string>();
     const imageCountByItem = new Map<string, number>();
+    const itemsByPresentation = new Map<string, VisualItemWithImages[]>();
+    const imagesByItem = new Map<string, VisualItemImageThumbnailRow[]>();
 
     itemRows.forEach((item) => {
       itemPresentationMap.set(item.id, item.visual_presentation_id);
@@ -781,7 +796,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
     if (itemRows.length) {
       const { data: imageData } = await supabase
         .from("visual_item_images")
-        .select("visual_item_id, image_url, order_index, created_at")
+        .select("id, visual_item_id, image_url, order_index, created_at")
         .in(
           "visual_item_id",
           itemRows.map((item) => item.id),
@@ -791,6 +806,8 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
 
       ((imageData ?? []) as VisualItemImageThumbnailRow[]).forEach((image) => {
         const presentationId = itemPresentationMap.get(image.visual_item_id);
+
+        imagesByItem.set(image.visual_item_id, [...(imagesByItem.get(image.visual_item_id) ?? []), image]);
 
         if (!image.image_url) {
           return;
@@ -808,6 +825,15 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
     }
 
     itemRows.forEach((item) => {
+      const presentationItems = itemsByPresentation.get(item.visual_presentation_id) ?? [];
+      presentationItems.push({
+        ...(item as unknown as VisualItem),
+        images: (imagesByItem.get(item.id) ?? []) as unknown as VisualItemImage[],
+      } as VisualItemWithImages);
+      itemsByPresentation.set(item.visual_presentation_id, presentationItems);
+    });
+
+    itemRows.forEach((item) => {
       const imageCount = imageCountByItem.get(item.id);
 
       if (typeof imageCount === "number") {
@@ -822,6 +848,84 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
 
     setVisualThumbnails(thumbnailMap);
     setVisualArtCounts(artCountMap);
+    return Promise.all(
+      presentations.map(async (presentation) => {
+        const presentationItems = itemsByPresentation.get(presentation.id) ?? [];
+        const range = getVisualPresentationDateRange(presentationItems);
+        const effectiveClientName = clientName || client?.name || "Cliente";
+        const localPresentation = applyAutomaticVisualPresentationRange(
+          presentation,
+          presentationItems,
+          effectiveClientName,
+        );
+
+        if (!range) {
+          return localPresentation;
+        }
+
+        const currentRange = visualPresentationDateRangeFromPresentation(presentation);
+        const currentBaseSlug = buildVisualPresentationSlugBaseFromRange(effectiveClientName, currentRange);
+        const nextBaseSlug = buildVisualPresentationSlugBaseFromRange(effectiveClientName, range);
+        const preferredCandidate = visualPresentationPreferredSlug(
+          presentation.public_slug,
+          currentBaseSlug,
+          nextBaseSlug,
+        );
+        const nextTitle = buildVisualPresentationTitleFromRange(effectiveClientName, range);
+
+        try {
+          const nextSlug = await resolveUniquePublicSlug("visual_presentations", nextBaseSlug, {
+            excludeId: presentation.id,
+            preferredCandidate,
+          });
+          const hasChanges =
+            presentation.title !== nextTitle ||
+            presentation.public_slug !== nextSlug ||
+            presentation.period_label !== range.periodLabel ||
+            presentation.start_display_date !== range.startLabel ||
+            presentation.end_display_date !== range.endLabel;
+
+          if (!hasChanges) {
+            return localPresentation;
+          }
+
+          const { data, error: updateError } = await supabase
+            .from("visual_presentations")
+            .update({
+              title: nextTitle,
+              public_slug: nextSlug,
+              period_label: range.periodLabel,
+              start_display_date: range.startLabel,
+              end_display_date: range.endLabel,
+              updated_at: new Date().toISOString(),
+            } as never)
+            .eq("id", presentation.id)
+            .select("*")
+            .maybeSingle();
+
+          if (updateError) {
+            setError(updateError.message);
+            return localPresentation;
+          }
+
+          return applyAutomaticVisualPresentationRange(
+            (data as VisualPresentation | null) ?? {
+              ...presentation,
+              title: nextTitle,
+              public_slug: nextSlug,
+              period_label: range.periodLabel,
+              start_display_date: range.startLabel,
+              end_display_date: range.endLabel,
+            },
+            presentationItems,
+            effectiveClientName,
+          );
+        } catch (requestError) {
+          setError(requestError instanceof Error ? requestError.message : "Erro ao atualizar link da apresentacao.");
+          return localPresentation;
+        }
+      }),
+    );
   }
 
   async function loadClient() {
@@ -849,7 +953,8 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
     if (firstError) {
       setError(firstError.message);
     } else {
-      const visualData = visualResult.data ?? [];
+      const visualData = ((visualResult.data ?? []) as VisualPresentation[]).sort((a, b) => createdTime(b) - createdTime(a));
+      const enrichedVisualData = await loadVisualThumbnails(visualData, clientResult.data?.name);
 
       setClient(clientResult.data);
       setClientProfileForm({
@@ -864,8 +969,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
         responsibleName: clientResult.data?.responsible_name || "",
       });
       setCopyPlannings(((copyResult.data ?? []) as CopyPlanningWithPreview[]).sort((a, b) => createdTime(b) - createdTime(a)));
-      setVisualPresentations(visualData.sort((a, b) => createdTime(b) - createdTime(a)));
-      await loadVisualThumbnails(visualData);
+      setVisualPresentations(enrichedVisualData);
     }
 
     setLoading(false);
@@ -1284,6 +1388,12 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
   function openCreationModal(mode: Exclude<CreationMode, null>) {
     setError(null);
     setCreationError(null);
+
+    if (mode === "visual") {
+      void handleCreateVisualPresentation();
+      return;
+    }
+
     setCreationMode(mode);
   }
 
@@ -1380,38 +1490,25 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
     setSavingCopy(false);
   }
 
-  async function handleCreateVisualPresentation(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function handleCreateVisualPresentation(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
 
-    const startDateError = getDayMonthInputError(visualForm.startDate);
-    const endDateError = getDayMonthInputError(visualForm.endDate);
-
-    if (startDateError) {
-      setCreationError(`Data inicial: ${startDateError}`);
-      return;
-    }
-
-    if (endDateError) {
-      setCreationError(`Data final: ${endDateError}`);
-      return;
-    }
+    if (savingVisual) return;
 
     const presentationTypeValue = normalizePresentationTypeForSave(visualForm.presentationType);
-
-    if (!presentationTypeValue) {
-      setCreationError("Selecione o tipo da apresentacao.");
-      return;
-    }
+    const presentationTitle = buildVisualPresentationTitleFromRange(client?.name || "Cliente");
+    const basePublicSlug = buildVisualPresentationSlugBaseFromRange(client?.name || "Cliente");
 
     setSavingVisual(true);
     setCreationError(null);
+    setError(null);
 
-    let uniquePublicSlug = visualPublicSlug || visualBasePublicSlug;
+    let uniquePublicSlug = basePublicSlug;
 
     try {
-      uniquePublicSlug = await resolveUniquePublicSlug("visual_presentations", visualBasePublicSlug);
+      uniquePublicSlug = await resolveUniquePublicSlug("visual_presentations", basePublicSlug);
     } catch (requestError) {
-      setCreationError(
+      setError(
         `Erro ao gerar link publico: ${
           requestError instanceof Error ? requestError.message : "tente novamente."
         }`,
@@ -1422,11 +1519,11 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
 
     const newPresentationBase = {
       client_id: clientId,
-      title: visualPresentationTitle,
+      title: presentationTitle,
       public_slug: uniquePublicSlug,
-      period_label: buildPeriodLabel(visualForm.startDate, visualForm.endDate),
-      start_display_date: visualForm.startDate,
-      end_display_date: visualForm.endDate,
+      period_label: null,
+      start_display_date: null,
+      end_display_date: null,
       detail_color: client?.primary_color || "#DFFF06",
       status: "draft",
       is_public: true,
@@ -1439,7 +1536,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
       .maybeSingle();
 
     if (requestError) {
-      setCreationError(`Erro ao criar apresentacao: ${requestError.message}`);
+      setError(`Erro ao criar apresentacao: ${requestError.message}`);
     } else {
       const newId = (data as { id?: string } | null)?.id;
 

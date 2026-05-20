@@ -14,6 +14,7 @@ import {
   type VisualItemWithImages,
 } from "@/components/visual-presentations/visual-item-board";
 import {
+  applyAutomaticVisualPresentationRange,
   buildVisualPresentationWeeks,
   filterVisualItemsForWeek,
   type VisualPresentationWeek,
@@ -232,9 +233,13 @@ export function PublicVisualPresentationView({ slug }: PublicVisualPresentationV
   const [error, setError] = useState<string | null>(null);
   const [selectedWeekId, setSelectedWeekId] = useState<string | null>(null);
   const { theme, isLight } = useTheme();
+  const effectivePresentation = useMemo(
+    () => (presentation ? applyAutomaticVisualPresentationRange(presentation, items, client?.name || "Cliente") : null),
+    [client?.name, items, presentation],
+  );
   const presentationWeeks = useMemo(
-    () => (presentation ? buildVisualPresentationWeeks(presentation) : []),
-    [presentation],
+    () => (effectivePresentation ? buildVisualPresentationWeeks(effectivePresentation) : []),
+    [effectivePresentation],
   );
   const shouldShowWeekSelection = presentationWeeks.length > 1;
   const selectedWeek = shouldShowWeekSelection
@@ -345,7 +350,7 @@ export function PublicVisualPresentationView({ slug }: PublicVisualPresentationV
     );
   }
 
-  if (!presentation) {
+  if (!effectivePresentation) {
     return <NotFoundState />;
   }
 
@@ -362,8 +367,8 @@ export function PublicVisualPresentationView({ slug }: PublicVisualPresentationV
       <section className="mx-auto w-full max-w-6xl px-4 pb-10 pt-5 md:pb-12 md:pt-6">
         <PublicClientHeading
           client={client}
-          title={presentation.title}
-          periodLabel={presentation.period_label}
+          title={effectivePresentation.title}
+          periodLabel={effectivePresentation.period_label}
         />
 
         {error ? (
@@ -402,7 +407,7 @@ export function PublicVisualPresentationView({ slug }: PublicVisualPresentationV
                     featuredItem={featuredItem}
                     client={client}
                     theme={theme}
-                    presentation={presentation}
+                    presentation={effectivePresentation}
                     primaryColor={primaryColor}
                     primaryTextColor={primaryTextColor}
                     secondaryColor={secondaryColor}

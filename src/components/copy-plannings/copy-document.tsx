@@ -30,7 +30,6 @@ import {
   Minus,
   PanelTop,
   Plus,
-  RemoveFormatting,
   Redo2,
   RectangleHorizontal,
   Square,
@@ -110,7 +109,7 @@ const titleMatchers: Record<CopySectionKey, RegExp> = {
   paidTraffic: /^planejamento\s+do\s+tr[aá]fego\s+pago$/i,
 };
 
-const fontOptions = ["Poppins", "Sora"];
+const fontOptions = ["Sora"];
 const sizeOptions = ["7px", "8px", "9px", "10px", "11px", "12px", "14px", "16px", "18px", "20px", "24px", "30px", "36px", "48px", "60px", "72px", "96px"];
 const weightOptions = [
   { label: "Light", value: "300" },
@@ -126,6 +125,7 @@ const lightAccent = "#1D10D7";
 const emptyContent = "<p></p>";
 const bodyColorToken = "body";
 const accentColorToken = "accent";
+const documentFontFamily = "Sora";
 const supportedPlanningImageTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
 const transferableTextStyleProperties = [
   "color",
@@ -1282,7 +1282,9 @@ function escapeHtml(value: string) {
 function plainTextToHtml(text: string) {
   const lines = text.replace(/\r\n?/g, "\n").split("\n");
 
-  return lines.map((line) => `<p>${escapeHtml(line) || "<br>"}</p>`).join("");
+  return lines
+    .map((line) => `<p><span style="font-family: ${documentFontFamily}">${escapeHtml(line) || "<br>"}</span></p>`)
+    .join("");
 }
 
 function mergeInlineStyle(element: HTMLElement, cssText: string) {
@@ -1372,6 +1374,19 @@ function moveBlockTextStylesToInlineSpans(document: Document) {
   });
 }
 
+function normalizeDocumentFontFamilies(document: Document) {
+  document.body.querySelectorAll<HTMLElement>("font[face]").forEach((element) => {
+    element.style.setProperty("font-family", documentFontFamily);
+    element.removeAttribute("face");
+  });
+
+  document.body.querySelectorAll<HTMLElement>("*").forEach((element) => {
+    if (element.style.getPropertyValue("font-family")) {
+      element.style.setProperty("font-family", documentFontFamily);
+    }
+  });
+}
+
 export function sanitizeHtml(html?: string | null) {
   if (!html) {
     return "";
@@ -1387,6 +1402,7 @@ export function sanitizeHtml(html?: string | null) {
 
   inlineClassStyles(document);
   moveBlockTextStylesToInlineSpans(document);
+  normalizeDocumentFontFamilies(document);
 
   blockedSelectors.forEach((selector) => {
     document.querySelectorAll(selector).forEach((node) => node.remove());
@@ -1685,8 +1701,9 @@ export function serializeCopyDocumentSections(sections: Partial<CopyDocumentSect
 
 function insertPlainText(view: EditorView, text: string) {
   const { state, dispatch } = view;
+  const textStyleMark = state.schema.marks.textStyle?.create({ fontFamily: documentFontFamily });
   const nodes = text.replace(/\r\n?/g, "\n").split("\n").flatMap((line, index) => {
-    const chunk = line ? [state.schema.text(line)] : [];
+    const chunk = line ? [state.schema.text(line, textStyleMark ? [textStyleMark] : undefined)] : [];
 
     if (index === 0) {
       return chunk;
@@ -2562,17 +2579,15 @@ function TiptapSection({
         if (!pasteAsPlainText) {
           const html = event.clipboardData?.getData("text/html");
 
-          if (!html) {
-            return false;
-          }
+          if (html) {
+            if (!isEditorReady(editor)) {
+              return false;
+            }
 
-          if (!isEditorReady(editor)) {
-            return false;
+            event.preventDefault();
+            editor.chain().focus().insertContent(normalizeDocumentHtml(html, sectionKey, clientName, theme)).run();
+            return true;
           }
-
-          event.preventDefault();
-          editor.chain().focus().insertContent(normalizeDocumentHtml(html, sectionKey, clientName, theme)).run();
-          return true;
         }
 
         if (!isEditorReady(editor)) {
@@ -2758,16 +2773,6 @@ function TiptapSection({
     const actions = [
       { label: "Colar com formatacao", action: () => pasteFromClipboard(false) },
       { label: "Colar texto puro", action: () => pasteFromClipboard(true) },
-      {
-        label: "Limpar formatacao",
-        action: () => {
-          if (!isEditorReady(editor)) {
-            return;
-          }
-
-          editor.chain().focus().unsetAllMarks().run();
-        },
-      },
     ];
 
     actions.forEach((item) => {
@@ -3464,7 +3469,7 @@ function Toolbar({ editor, theme, className, onImageUpload }: ToolbarProps) {
       <select
         aria-label="Fonte"
         className="h-9 min-w-[82px] shrink-0 rounded-xl border border-black/10 bg-transparent px-2 text-xs text-foreground outline-none transition hover:border-black/20 dark:border-white/10 dark:hover:border-white/20 md:px-3"
-        defaultValue="Poppins"
+        defaultValue={documentFontFamily}
         disabled={!editorReady}
         onChange={(event) => applyTextStyle(editor, { fontFamily: event.target.value })}
       >
@@ -3631,7 +3636,6 @@ function Toolbar({ editor, theme, className, onImageUpload }: ToolbarProps) {
               { label: "Alinhar direita", icon: AlignRight, disabled: !editorReady, action: (readyEditor: Editor) => readyEditor.chain().focus().setTextAlign("right").run() },
               { label: "Lista", icon: List, disabled: !editorReady, action: (readyEditor: Editor) => readyEditor.chain().focus().toggleBulletList().run() },
               { label: "Lista numerada", icon: ListOrdered, disabled: !editorReady, action: (readyEditor: Editor) => readyEditor.chain().focus().toggleOrderedList().run() },
-              { label: "Limpar", icon: RemoveFormatting, disabled: !editorReady, action: (readyEditor: Editor) => readyEditor.chain().focus().unsetAllMarks().run() },
             ].map((item) => {
               const Icon = item.icon;
 
@@ -3731,9 +3735,6 @@ function Toolbar({ editor, theme, className, onImageUpload }: ToolbarProps) {
       <Button type="button" variant="ghost" size="icon" className={desktopIconButtonClass} disabled={!editorReady} onClick={() => runEditorCommand((readyEditor) => readyEditor.chain().focus().toggleOrderedList().run())}>
         <ListOrdered className="h-4 w-4" />
       </Button>
-      <Button type="button" variant="ghost" size="icon" className={desktopIconButtonClass} disabled={!editorReady} onClick={() => runEditorCommand((readyEditor) => readyEditor.chain().focus().unsetAllMarks().run())}>
-        <RemoveFormatting className="h-4 w-4" />
-      </Button>
     </div>
   );
 }
@@ -3830,6 +3831,7 @@ export function CopyDocument({
         .tiptap-copy-editor .ProseMirror {
           min-height: 68vh;
           outline: none;
+          font-family: var(--font-sora), Sora, var(--font-poppins), Poppins, sans-serif;
           white-space: pre-wrap;
           word-break: break-word;
         }
