@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const ADMIN_COOKIE_NAME = "zacx_admin_session";
+const REQUIRED_ADMIN_PASSWORD = "GRUPOZACX";
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,12 +11,11 @@ export async function POST(request: NextRequest) {
     const adminPassword = process.env.ADMIN_PASSWORD;
     const sessionSecret = process.env.ADMIN_SESSION_SECRET;
 
-    if (!adminPassword || !sessionSecret) {
+    if (!adminPassword || adminPassword !== REQUIRED_ADMIN_PASSWORD || !sessionSecret) {
       return NextResponse.json(
         {
           ok: false,
-          message:
-            "As variáveis ADMIN_PASSWORD e ADMIN_SESSION_SECRET não foram configuradas.",
+          message: "Configuração de acesso ADM inválida.",
         },
         { status: 500 }
       );

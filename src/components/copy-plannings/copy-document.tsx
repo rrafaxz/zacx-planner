@@ -2844,7 +2844,7 @@ function TiptapSection({
                 <StickyNote className="h-4 w-4" />
                 Anotação
               </button>
-              <button type="button" onClick={() => openCommentComposer()}>
+              <button type="button" className="copy-document-comment-gadget-action" onClick={() => openCommentComposer()}>
                 <MessageSquare className="h-4 w-4" />
                 Comentário
               </button>
@@ -3294,6 +3294,9 @@ function Toolbar({ editor, theme, className, onImageUpload }: ToolbarProps) {
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [tablePickerOpen, setTablePickerOpen] = useState(false);
+  const [mobileInsertOpen, setMobileInsertOpen] = useState(false);
+  const [mobileColorOpen, setMobileColorOpen] = useState(false);
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const editorReady = isEditorReady(editor);
   const canUndo = editorReady ? editor.can().undo() : false;
   const canRedo = editorReady ? editor.can().redo() : false;
@@ -3302,6 +3305,14 @@ function Toolbar({ editor, theme, className, onImageUpload }: ToolbarProps) {
   const isUnderlineActive = editorReady ? editor.isActive("underline") : false;
   const iconButtonClass =
     "h-9 w-9 shrink-0 rounded-xl border border-white/10 bg-white/5 p-0 text-muted-foreground transition hover:border-white/20 hover:bg-white/10 hover:text-foreground data-[active=true]:border-[var(--zacx-accent)] data-[active=true]:bg-[var(--zacx-accent)]/15 data-[active=true]:text-foreground dark:border-white/10";
+  const desktopIconButtonClass = cn(iconButtonClass, "hidden md:inline-flex");
+  const desktopDividerClass = "mx-1 hidden h-6 w-px shrink-0 bg-border md:block";
+  const mobileGroupButtonClass =
+    "inline-flex h-9 shrink-0 items-center rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground transition hover:bg-secondary md:hidden";
+  const mobilePopoverClass =
+    "absolute top-10 z-40 grid min-w-40 gap-1 border border-border bg-background p-1.5 text-xs shadow-sm";
+  const mobilePopoverButtonClass =
+    "flex h-8 w-full items-center gap-2 px-2 text-left text-xs text-foreground transition hover:bg-secondary disabled:opacity-45";
 
   function runEditorCommand(command: (readyEditor: Editor) => void) {
     if (!isEditorReady(editor)) {
@@ -3346,7 +3357,7 @@ function Toolbar({ editor, theme, className, onImageUpload }: ToolbarProps) {
   return (
     <div
       className={cn(
-        "sticky top-3 z-20 mb-4 flex flex-wrap items-center gap-2 overflow-visible rounded-2xl border border-black/10 bg-background p-2 shadow-sm dark:border-white/10",
+        "sticky top-3 z-20 mb-4 flex flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-visible rounded-2xl border border-black/10 bg-background p-2 shadow-sm dark:border-white/10 md:flex-wrap md:gap-2 md:overflow-visible",
         className,
       )}
       style={{ ["--zacx-accent" as string]: theme === "light" ? lightAccent : darkAccent }}
@@ -3355,7 +3366,7 @@ function Toolbar({ editor, theme, className, onImageUpload }: ToolbarProps) {
         type="button"
         variant="ghost"
         size="icon"
-        className={iconButtonClass}
+        className={desktopIconButtonClass}
         disabled={!canUndo}
         onClick={() => runEditorCommand((readyEditor) => readyEditor.chain().focus().undo().run())}
         aria-label="Desfazer"
@@ -3367,7 +3378,7 @@ function Toolbar({ editor, theme, className, onImageUpload }: ToolbarProps) {
         type="button"
         variant="ghost"
         size="icon"
-        className={iconButtonClass}
+        className={desktopIconButtonClass}
         disabled={!canRedo}
         onClick={() => runEditorCommand((readyEditor) => readyEditor.chain().focus().redo().run())}
         aria-label="Refazer"
@@ -3376,7 +3387,7 @@ function Toolbar({ editor, theme, className, onImageUpload }: ToolbarProps) {
         <Redo2 className="h-4 w-4" />
       </Button>
 
-      <span className="mx-1 h-6 w-px shrink-0 bg-border" />
+      <span className={desktopDividerClass} />
 
       <input
         ref={imageInputRef}
@@ -3393,7 +3404,7 @@ function Toolbar({ editor, theme, className, onImageUpload }: ToolbarProps) {
         type="button"
         variant="ghost"
         size="icon"
-        className={iconButtonClass}
+        className={desktopIconButtonClass}
         disabled={!editorReady || uploadingImage || !onImageUpload}
         onClick={() => imageInputRef.current?.click()}
         aria-label="Inserir imagem"
@@ -3405,7 +3416,7 @@ function Toolbar({ editor, theme, className, onImageUpload }: ToolbarProps) {
         type="button"
         variant="ghost"
         size="icon"
-        className={iconButtonClass}
+        className={desktopIconButtonClass}
         disabled={!editorReady}
         onClick={() =>
           runEditorCommand((readyEditor) =>
@@ -3424,7 +3435,7 @@ function Toolbar({ editor, theme, className, onImageUpload }: ToolbarProps) {
       >
         <PanelTop className="h-4 w-4" />
       </Button>
-      <div className="relative shrink-0">
+      <div className="relative hidden shrink-0 md:block">
         <Button
           type="button"
           variant="ghost"
@@ -3448,11 +3459,11 @@ function Toolbar({ editor, theme, className, onImageUpload }: ToolbarProps) {
         ) : null}
       </div>
 
-      <span className="mx-1 h-6 w-px shrink-0 bg-border" />
+      <span className={desktopDividerClass} />
 
       <select
         aria-label="Fonte"
-        className="h-9 shrink-0 rounded-xl border border-black/10 bg-transparent px-3 text-xs text-foreground outline-none transition hover:border-black/20 dark:border-white/10 dark:hover:border-white/20"
+        className="h-9 min-w-[82px] shrink-0 rounded-xl border border-black/10 bg-transparent px-2 text-xs text-foreground outline-none transition hover:border-black/20 dark:border-white/10 dark:hover:border-white/20 md:px-3"
         defaultValue="Poppins"
         disabled={!editorReady}
         onChange={(event) => applyTextStyle(editor, { fontFamily: event.target.value })}
@@ -3466,7 +3477,7 @@ function Toolbar({ editor, theme, className, onImageUpload }: ToolbarProps) {
 
       <select
         aria-label="Tamanho da fonte"
-        className="h-9 shrink-0 rounded-xl border border-black/10 bg-transparent px-3 text-xs text-foreground outline-none transition hover:border-black/20 dark:border-white/10 dark:hover:border-white/20"
+        className="h-9 w-[64px] shrink-0 rounded-xl border border-black/10 bg-transparent px-2 text-xs text-foreground outline-none transition hover:border-black/20 dark:border-white/10 dark:hover:border-white/20 md:w-auto md:px-3"
         defaultValue="16px"
         disabled={!editorReady}
         onChange={(event) => applyTextStyle(editor, { fontSize: event.target.value })}
@@ -3480,7 +3491,7 @@ function Toolbar({ editor, theme, className, onImageUpload }: ToolbarProps) {
 
       <select
         aria-label="Peso da fonte"
-        className="h-9 shrink-0 rounded-xl border border-black/10 bg-transparent px-3 text-xs text-foreground outline-none transition hover:border-black/20 dark:border-white/10 dark:hover:border-white/20"
+        className="h-9 w-[82px] shrink-0 rounded-xl border border-black/10 bg-transparent px-2 text-xs text-foreground outline-none transition hover:border-black/20 dark:border-white/10 dark:hover:border-white/20 md:w-auto md:px-3"
         defaultValue="400"
         disabled={!editorReady}
         onChange={(event) => applyTextStyle(editor, { fontWeight: event.target.value })}
@@ -3492,13 +3503,165 @@ function Toolbar({ editor, theme, className, onImageUpload }: ToolbarProps) {
         ))}
       </select>
 
-      <span className="mx-1 h-6 w-px shrink-0 bg-border" />
+      <div className="relative shrink-0 md:hidden">
+        <button
+          type="button"
+          className={mobileGroupButtonClass}
+          onClick={() => {
+            setMobileInsertOpen((open) => !open);
+            setMobileColorOpen(false);
+            setMobileMoreOpen(false);
+          }}
+        >
+          Inserir
+        </button>
+        {mobileInsertOpen ? (
+          <div className={cn(mobilePopoverClass, "left-0")}>
+            <button
+              type="button"
+              className={mobilePopoverButtonClass}
+              disabled={!editorReady || uploadingImage || !onImageUpload}
+              onClick={() => imageInputRef.current?.click()}
+            >
+              <ImageIcon className="h-4 w-4" />
+              Imagem
+            </button>
+            <button
+              type="button"
+              className={mobilePopoverButtonClass}
+              disabled={!editorReady}
+              onClick={() => {
+                runEditorCommand((readyEditor) =>
+                  insertBlockContent(readyEditor, {
+                    type: "planningBox",
+                    content: [{ type: "paragraph" }],
+                  }),
+                );
+                setMobileInsertOpen(false);
+              }}
+            >
+              <PanelTop className="h-4 w-4" />
+              Caixa
+            </button>
+            <div className="relative">
+              <button
+                type="button"
+                className={mobilePopoverButtonClass}
+                disabled={!editorReady}
+                onClick={() => setTablePickerOpen((open) => !open)}
+              >
+                <Table2 className="h-4 w-4" />
+                Tabela
+              </button>
+              {tablePickerOpen ? (
+                <TablePicker
+                  className="right-0 top-9"
+                  onSelect={(rows, columns) => {
+                    runEditorCommand((readyEditor) => insertBlockContent(readyEditor, createPlanningTableContent(rows, columns)));
+                    setTablePickerOpen(false);
+                    setMobileInsertOpen(false);
+                  }}
+                />
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="relative shrink-0 md:hidden">
+        <button
+          type="button"
+          className={mobileGroupButtonClass}
+          onClick={() => {
+            setMobileColorOpen((open) => !open);
+            setMobileInsertOpen(false);
+            setMobileMoreOpen(false);
+          }}
+        >
+          Cores
+        </button>
+        {mobileColorOpen ? (
+          <div className={cn(mobilePopoverClass, "right-0 grid-cols-4")}>
+            {colors.map((color) => (
+              <button
+                key={color.label}
+                type="button"
+                aria-label={color.label}
+                title={color.label}
+                className="h-8 w-8 border border-black/10 p-1 transition hover:scale-105 hover:border-black/20 dark:border-white/20 dark:hover:border-white/40"
+                disabled={!editorReady}
+                onClick={() => {
+                  if (color.token) {
+                    applySemanticColor(editor, color.token);
+                  } else {
+                    applyFixedColor(editor, color.value);
+                  }
+                  setMobileColorOpen(false);
+                }}
+              >
+                <span className="block h-full w-full border border-black/10 dark:border-white/20" style={{ backgroundColor: color.swatch }} />
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="relative shrink-0 md:hidden">
+        <button
+          type="button"
+          className={mobileGroupButtonClass}
+          onClick={() => {
+            setMobileMoreOpen((open) => !open);
+            setMobileInsertOpen(false);
+            setMobileColorOpen(false);
+          }}
+        >
+          Mais
+        </button>
+        {mobileMoreOpen ? (
+          <div className={cn(mobilePopoverClass, "right-0")}>
+            {[
+              { label: "Desfazer", icon: Undo2, disabled: !canUndo, action: (readyEditor: Editor) => readyEditor.chain().focus().undo().run() },
+              { label: "Refazer", icon: Redo2, disabled: !canRedo, action: (readyEditor: Editor) => readyEditor.chain().focus().redo().run() },
+              { label: "Negrito", icon: Bold, disabled: !editorReady, action: (readyEditor: Editor) => readyEditor.chain().focus().toggleBold().run() },
+              { label: "Itálico", icon: Italic, disabled: !editorReady, action: (readyEditor: Editor) => readyEditor.chain().focus().toggleItalic().run() },
+              { label: "Sublinhado", icon: UnderlineIcon, disabled: !editorReady, action: (readyEditor: Editor) => readyEditor.chain().focus().toggleUnderline().run() },
+              { label: "Alinhar esquerda", icon: AlignLeft, disabled: !editorReady, action: (readyEditor: Editor) => readyEditor.chain().focus().setTextAlign("left").run() },
+              { label: "Centralizar", icon: AlignCenter, disabled: !editorReady, action: (readyEditor: Editor) => readyEditor.chain().focus().setTextAlign("center").run() },
+              { label: "Alinhar direita", icon: AlignRight, disabled: !editorReady, action: (readyEditor: Editor) => readyEditor.chain().focus().setTextAlign("right").run() },
+              { label: "Lista", icon: List, disabled: !editorReady, action: (readyEditor: Editor) => readyEditor.chain().focus().toggleBulletList().run() },
+              { label: "Lista numerada", icon: ListOrdered, disabled: !editorReady, action: (readyEditor: Editor) => readyEditor.chain().focus().toggleOrderedList().run() },
+              { label: "Limpar", icon: RemoveFormatting, disabled: !editorReady, action: (readyEditor: Editor) => readyEditor.chain().focus().unsetAllMarks().run() },
+            ].map((item) => {
+              const Icon = item.icon;
+
+              return (
+                <button
+                  key={item.label}
+                  type="button"
+                  className={mobilePopoverButtonClass}
+                  disabled={item.disabled}
+                  onClick={() => {
+                    runEditorCommand(item.action);
+                    setMobileMoreOpen(false);
+                  }}
+                >
+                  <Icon className="h-4 w-4" />
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+
+      <span className={desktopDividerClass} />
 
       <Button
         type="button"
         variant="ghost"
         size="icon"
-        className={iconButtonClass}
+        className={desktopIconButtonClass}
         data-active={isBoldActive || undefined}
         disabled={!editorReady}
         onClick={() => runEditorCommand((readyEditor) => readyEditor.chain().focus().toggleBold().run())}
@@ -3509,7 +3672,7 @@ function Toolbar({ editor, theme, className, onImageUpload }: ToolbarProps) {
         type="button"
         variant="ghost"
         size="icon"
-        className={iconButtonClass}
+        className={desktopIconButtonClass}
         data-active={isItalicActive || undefined}
         disabled={!editorReady}
         onClick={() => runEditorCommand((readyEditor) => readyEditor.chain().focus().toggleItalic().run())}
@@ -3520,7 +3683,7 @@ function Toolbar({ editor, theme, className, onImageUpload }: ToolbarProps) {
         type="button"
         variant="ghost"
         size="icon"
-        className={iconButtonClass}
+        className={desktopIconButtonClass}
         data-active={isUnderlineActive || undefined}
         disabled={!editorReady}
         onClick={() => runEditorCommand((readyEditor) => readyEditor.chain().focus().toggleUnderline().run())}
@@ -3528,7 +3691,7 @@ function Toolbar({ editor, theme, className, onImageUpload }: ToolbarProps) {
         <UnderlineIcon className="h-4 w-4" />
       </Button>
 
-      <div className="flex shrink-0 items-center gap-1 px-1">
+      <div className="hidden shrink-0 items-center gap-1 px-1 md:flex">
         {colors.map((color) => (
           <button
             key={color.label}
@@ -3551,24 +3714,24 @@ function Toolbar({ editor, theme, className, onImageUpload }: ToolbarProps) {
         ))}
       </div>
 
-      <span className="mx-1 h-6 w-px shrink-0 bg-border" />
+      <span className={desktopDividerClass} />
 
-      <Button type="button" variant="ghost" size="icon" className={iconButtonClass} disabled={!editorReady} onClick={() => runEditorCommand((readyEditor) => readyEditor.chain().focus().setTextAlign("left").run())}>
+      <Button type="button" variant="ghost" size="icon" className={desktopIconButtonClass} disabled={!editorReady} onClick={() => runEditorCommand((readyEditor) => readyEditor.chain().focus().setTextAlign("left").run())}>
         <AlignLeft className="h-4 w-4" />
       </Button>
-      <Button type="button" variant="ghost" size="icon" className={iconButtonClass} disabled={!editorReady} onClick={() => runEditorCommand((readyEditor) => readyEditor.chain().focus().setTextAlign("center").run())}>
+      <Button type="button" variant="ghost" size="icon" className={desktopIconButtonClass} disabled={!editorReady} onClick={() => runEditorCommand((readyEditor) => readyEditor.chain().focus().setTextAlign("center").run())}>
         <AlignCenter className="h-4 w-4" />
       </Button>
-      <Button type="button" variant="ghost" size="icon" className={iconButtonClass} disabled={!editorReady} onClick={() => runEditorCommand((readyEditor) => readyEditor.chain().focus().setTextAlign("right").run())}>
+      <Button type="button" variant="ghost" size="icon" className={desktopIconButtonClass} disabled={!editorReady} onClick={() => runEditorCommand((readyEditor) => readyEditor.chain().focus().setTextAlign("right").run())}>
         <AlignRight className="h-4 w-4" />
       </Button>
-      <Button type="button" variant="ghost" size="icon" className={iconButtonClass} disabled={!editorReady} onClick={() => runEditorCommand((readyEditor) => readyEditor.chain().focus().toggleBulletList().run())}>
+      <Button type="button" variant="ghost" size="icon" className={desktopIconButtonClass} disabled={!editorReady} onClick={() => runEditorCommand((readyEditor) => readyEditor.chain().focus().toggleBulletList().run())}>
         <List className="h-4 w-4" />
       </Button>
-      <Button type="button" variant="ghost" size="icon" className={iconButtonClass} disabled={!editorReady} onClick={() => runEditorCommand((readyEditor) => readyEditor.chain().focus().toggleOrderedList().run())}>
+      <Button type="button" variant="ghost" size="icon" className={desktopIconButtonClass} disabled={!editorReady} onClick={() => runEditorCommand((readyEditor) => readyEditor.chain().focus().toggleOrderedList().run())}>
         <ListOrdered className="h-4 w-4" />
       </Button>
-      <Button type="button" variant="ghost" size="icon" className={iconButtonClass} disabled={!editorReady} onClick={() => runEditorCommand((readyEditor) => readyEditor.chain().focus().unsetAllMarks().run())}>
+      <Button type="button" variant="ghost" size="icon" className={desktopIconButtonClass} disabled={!editorReady} onClick={() => runEditorCommand((readyEditor) => readyEditor.chain().focus().unsetAllMarks().run())}>
         <RemoveFormatting className="h-4 w-4" />
       </Button>
     </div>
@@ -4547,6 +4710,71 @@ export function CopyDocument({
             position: static;
             width: 100%;
             margin-top: 20px;
+          }
+        }
+
+        @media (max-width: 767px) {
+          .copy-document-editor {
+            max-width: 100%;
+            overflow-x: hidden;
+            padding: 1.25rem 1rem 1.5rem !important;
+          }
+
+          .copy-document-fixed-header {
+            margin-bottom: 20px;
+          }
+
+          .copy-document-fixed-header h2 {
+            font-size: 20px;
+            line-height: 1.15;
+          }
+
+          .copy-document-fixed-header p {
+            font-size: 12px;
+          }
+
+          .tiptap-copy-editor {
+            max-width: 100%;
+            overflow-x: hidden;
+          }
+
+          .tiptap-copy-editor .ProseMirror {
+            min-height: 58vh;
+            overflow-x: hidden;
+          }
+
+          .tiptap-copy-editor .ProseMirror table,
+          .tiptap-copy-editor .ProseMirror .planning-doc-table {
+            display: block;
+            max-width: 100%;
+            overflow-x: auto;
+          }
+
+          .tiptap-copy-editor .ProseMirror .planning-doc-box,
+          .tiptap-copy-editor .ProseMirror .planning-doc-note,
+          .tiptap-copy-editor .ProseMirror .planning-doc-image-wrapper {
+            max-width: 100%;
+          }
+
+          .copy-document-gadget {
+            top: 10px;
+            left: 10px;
+          }
+
+          .copy-document-gadget-trigger {
+            width: 30px;
+            height: 30px;
+            border-radius: 7px;
+          }
+
+          .copy-document-gadget-menu {
+            max-width: calc(100vw - 48px);
+          }
+
+          .copy-document-comment-gadget-action,
+          .copy-document-floating-comment,
+          .copy-document-comments-panel {
+            display: none !important;
           }
         }
       `}</style>

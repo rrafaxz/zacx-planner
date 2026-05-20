@@ -254,37 +254,37 @@ export function ActivityFeed() {
         </Card>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
         {loading ? (
-          <Card className="sm:col-span-2 xl:col-span-3">
+          <Card className="col-span-3 md:col-span-2 xl:col-span-3">
             <CardContent className="pt-5 text-sm text-muted-foreground">Carregando feed...</CardContent>
           </Card>
         ) : visibleItems.length ? (
           visibleItems.map((item) => (
             <Link key={`${item.type}-${item.id}`} href={item.href} className="block h-full">
               <Card className="group h-full overflow-hidden bg-background shadow-none transition hover:-translate-y-0.5 hover:border-foreground/20">
-                <CardContent className="flex h-full flex-col p-3">
+                <CardContent className="flex h-full flex-col p-1.5 sm:p-3">
                   {item.type === "presentations" ? (
-                    <div className="relative h-40 overflow-hidden rounded-lg border border-border bg-secondary">
+                    <div className="relative h-20 overflow-hidden rounded-md border border-border bg-secondary sm:h-40 sm:rounded-lg">
                       {item.imageUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={item.imageUrl} alt="" className="h-full w-full object-cover transition group-hover:scale-[1.03]" />
                       ) : (
                         <div className="grid h-full place-items-center text-muted-foreground">
-                          <ImagePlus className="h-8 w-8" />
+                          <ImagePlus className="h-5 w-5 sm:h-8 sm:w-8" />
                         </div>
                       )}
                     </div>
                   ) : (
-                    <div className="h-40 overflow-hidden rounded-lg border border-black/10 bg-white p-3 text-neutral-950">
-                      <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-[var(--zacx-brand)]" />
-                      <p className="text-[9px] leading-4 text-neutral-500">
+                    <div className="h-20 overflow-hidden rounded-md border border-black/10 bg-white p-1.5 text-neutral-950 sm:h-40 sm:rounded-lg sm:p-3">
+                      <div className="mx-auto mb-1.5 h-0.5 w-8 rounded-full bg-[var(--zacx-brand)] sm:mb-3 sm:h-1 sm:w-10" />
+                      <p className="text-[7px] leading-3 text-neutral-500 sm:text-[9px] sm:leading-4">
                         {item.previewText || "Prévia do planejamento"}
                       </p>
                     </div>
                   )}
-                  <div className="flex flex-1 flex-col px-1 pb-1 pt-3">
-                    <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                  <div className="flex flex-1 flex-col px-0.5 pb-1 pt-2 sm:px-1 sm:pt-3">
+                    <div className="mb-1 hidden flex-wrap items-center gap-1.5 sm:mb-2 sm:flex">
                       <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
                         {itemTypeLabel(item.type)}
                       </span>
@@ -294,14 +294,14 @@ export function ActivityFeed() {
                         </span>
                       ) : null}
                     </div>
-                    <h2 className="sora-heading line-clamp-2 text-base font-medium leading-snug text-foreground">
+                    <h2 className="sora-heading line-clamp-2 text-[11px] font-medium leading-tight text-foreground sm:text-base sm:leading-snug">
                       {item.title}
                     </h2>
-                    <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
+                    <p className="mt-2 hidden line-clamp-2 text-xs text-muted-foreground sm:block">
                       {item.clientName ? `${item.clientName} · ` : ""}
                       {item.periodLabel || "Período não definido"}
                     </p>
-                    <p className="mt-auto pt-3 text-[11px] text-muted-foreground">
+                    <p className="mt-auto hidden pt-3 text-[11px] text-muted-foreground sm:block">
                       {item.date ? formatDateBR(item.date) : "Sem data"}
                     </p>
                   </div>
@@ -310,7 +310,7 @@ export function ActivityFeed() {
             </Link>
           ))
         ) : (
-          <Card className="border-dashed bg-background shadow-none sm:col-span-2 xl:col-span-3">
+          <Card className="col-span-3 border-dashed bg-background shadow-none md:col-span-2 xl:col-span-3">
             <CardContent className="pt-5 text-sm text-muted-foreground">
               Nenhum item encontrado.
             </CardContent>

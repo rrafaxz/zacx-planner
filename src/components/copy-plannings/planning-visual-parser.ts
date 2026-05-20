@@ -35,6 +35,9 @@ export type PlanningVisualItem = {
 export type PlanningVisualSectionKey = keyof PlanningVisualSections;
 
 export type PlanningVisualEditValues = {
+  date: string;
+  weekday: string;
+  typeLabel: string;
   theme: string;
   objective: string;
   caption: string;
@@ -939,7 +942,10 @@ function normalizeSubItems(items: PlanningVisualSubItem[]) {
 }
 
 function buildStandardItemLines(item: PlanningVisualItem, values: PlanningVisualEditValues) {
-  const headerLine = firstLine(item.rawText) || `${item.date} - ${item.typeLabel}`;
+  const date = cleanLine(values.date || item.displayDate || item.date);
+  const weekday = cleanLine(values.weekday || item.weekday);
+  const typeLabel = cleanLine(values.typeLabel || item.typeLabel).toUpperCase();
+  const headerLine = `${date}${weekday ? ` (${weekday})` : ""} — ${typeLabel}`;
   const lines = [headerLine];
   const objective = cleanLine(values.objective);
   const theme = cleanLine(values.theme);
@@ -998,8 +1004,9 @@ function buildStandardItemLines(item: PlanningVisualItem, values: PlanningVisual
 function buildStoriesScheduleLine(item: PlanningVisualItem, values: PlanningVisualEditValues) {
   const storyFormat = cleanLine(values.storyFormat || item.storyFormat || item.theme || "Story");
   const content = cleanLine(values.content || values.caption || item.content || item.caption);
-  const date = item.date || item.displayDate;
-  const weekday = item.weekday ? ` (${item.weekday})` : "";
+  const date = cleanLine(values.date || item.date || item.displayDate);
+  const weekdayValue = cleanLine(values.weekday || item.weekday);
+  const weekday = weekdayValue ? ` (${weekdayValue})` : "";
 
   return `${date}${weekday} — ${storyFormat} ${content}`.trim();
 }

@@ -865,33 +865,33 @@ export function AdminDashboard() {
                   index < 5 && "border-amber-300/70 dark:border-amber-400/40",
                 )}
               >
-                <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+                <CardContent className="grid grid-cols-[42px_minmax(0,1fr)] items-center gap-2 p-3 sm:flex sm:gap-3 sm:p-4">
                   <div className="relative shrink-0">
                     <ClientAvatarDisplay
                       name={item.client.name}
                       logoUrl={item.client.logo_url}
                       accentColor={item.client.primary_color}
-                      className="h-12 w-12 text-base"
+                      className="h-10 w-10 text-sm sm:h-12 sm:w-12 sm:text-base"
                     />
                     {index < 5 ? (
-                      <span className="absolute -left-2 -top-2 grid h-7 w-7 place-items-center rounded-full border border-amber-300/80 bg-background text-amber-500">
-                        <Crown className="h-4 w-4 fill-amber-400 text-amber-500" />
+                      <span className="absolute -left-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full border border-amber-300/80 bg-background text-amber-500 sm:-left-2 sm:-top-2 sm:h-7 sm:w-7">
+                        <Crown className="h-3 w-3 fill-amber-400 text-amber-500 sm:h-4 sm:w-4" />
                       </span>
                     ) : null}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex min-w-0 items-center gap-2">
                       <span className="shrink-0 text-xs font-semibold text-muted-foreground">{index + 1}º</span>
-                      <h3 className="sora-heading truncate text-base font-medium text-foreground">{item.client.name}</h3>
+                      <h3 className="sora-heading truncate text-sm font-medium text-foreground sm:text-base">{item.client.name}</h3>
                     </div>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="truncate text-[11px] text-muted-foreground sm:text-xs">
                       Responsável: {item.client.responsible_name || "Sem responsável"}
                     </p>
                   </div>
-                  <div className="grid grid-cols-3 gap-3 text-right text-xs text-muted-foreground sm:min-w-[320px]">
-                    <span><strong className="block text-base text-foreground">{item.plannings}</strong>Planej.</span>
-                    <span><strong className="block text-base text-foreground">{item.presentations}</strong>APs</span>
-                    <span><strong className="block text-base text-foreground">{item.total}</strong>Total</span>
+                  <div className="col-span-2 grid grid-cols-3 gap-1 rounded-md bg-foreground/[0.035] px-2 py-1.5 text-center text-[10px] text-muted-foreground sm:ml-auto sm:min-w-[320px] sm:gap-3 sm:bg-transparent sm:px-0 sm:py-0 sm:text-right sm:text-xs">
+                    <span><strong className="block text-sm leading-4 text-foreground sm:text-base sm:leading-normal">{item.plannings}</strong>Planej.</span>
+                    <span><strong className="block text-sm leading-4 text-foreground sm:text-base sm:leading-normal">{item.presentations}</strong>APs</span>
+                    <span><strong className="block text-sm leading-4 text-foreground sm:text-base sm:leading-normal">{item.total}</strong>Total</span>
                   </div>
                 </CardContent>
               </Card>

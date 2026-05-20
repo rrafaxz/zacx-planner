@@ -122,6 +122,38 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
     loadPlanning();
   }, [planningId]);
 
+  useEffect(() => {
+    if (!confirmArchiveOpen || typeof window === "undefined") {
+      return;
+    }
+
+    const scrollY = window.scrollY;
+    const { style } = document.body;
+    const originalPosition = style.position;
+    const originalTop = style.top;
+    const originalLeft = style.left;
+    const originalRight = style.right;
+    const originalWidth = style.width;
+    const originalOverflow = style.overflow;
+
+    style.position = "fixed";
+    style.top = `-${scrollY}px`;
+    style.left = "0";
+    style.right = "0";
+    style.width = "100%";
+    style.overflow = "hidden";
+
+    return () => {
+      style.position = originalPosition;
+      style.top = originalTop;
+      style.left = originalLeft;
+      style.right = originalRight;
+      style.width = originalWidth;
+      style.overflow = originalOverflow;
+      window.scrollTo(0, scrollY);
+    };
+  }, [confirmArchiveOpen]);
+
   const saveSectionContent = useCallback(async (sectionKey: CopySectionKey, rawContent: string, showNotice = false) => {
     if (!planning) return;
 
@@ -347,17 +379,17 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
   }
 
   return (
-    <section className="planning-editor-shell relative -my-6 min-h-screen [--planning-header-height:126px] [--planning-header-offset:3.5rem] [--planning-side-nav-top:calc(var(--planning-header-offset)_+_var(--planning-header-height)_+_var(--planning-toolbar-height)_+_12px)] [--planning-toolbar-height:58px] md:-my-8 lg:[--planning-header-height:77px] lg:[--planning-header-offset:0px]">
+    <section className="planning-editor-shell relative -my-6 min-h-screen [--planning-header-height:84px] [--planning-header-offset:3.5rem] [--planning-side-nav-top:calc(var(--planning-header-offset)_+_var(--planning-header-height)_+_var(--planning-toolbar-height)_+_12px)] [--planning-toolbar-height:46px] md:-my-8 md:[--planning-header-height:110px] md:[--planning-toolbar-height:58px] lg:[--planning-header-height:77px] lg:[--planning-header-offset:0px]">
       <Tabs defaultValue="visual" className="min-h-screen">
         <div className="sticky top-14 z-50 border-b border-border bg-background md:top-0">
-          <div className="flex min-h-[var(--planning-header-height)] flex-col justify-center gap-2 px-3 py-3 md:px-5 lg:py-0">
-            <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex min-w-0 items-center gap-3 lg:flex-1">
+          <div className="flex min-h-[var(--planning-header-height)] flex-col justify-center gap-1.5 px-2.5 py-2 md:gap-2 md:px-5 md:py-3 lg:py-0">
+            <div className="flex min-w-0 flex-col gap-1.5 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex min-w-0 items-center gap-2 lg:flex-1">
                 <Button
                   asChild
                   variant="ghostSecondary"
                   size="icon"
-                  className="h-8 w-8 shrink-0 rounded-full"
+                  className="h-7 w-7 shrink-0 rounded-full md:h-8 md:w-8"
                   title="Voltar para cliente"
                 >
                   <Link href={`/admin/clientes/${planning.client_id}`} aria-label="Voltar para cliente">
@@ -384,20 +416,20 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
                         event.currentTarget.blur();
                       }
                     }}
-                    className="sora-heading block w-full max-w-[560px] truncate rounded-md border border-transparent bg-transparent px-1 py-0.5 text-xl font-medium tracking-normal text-foreground outline-none transition hover:border-border focus:border-foreground/30 md:text-2xl"
+                    className="sora-heading block w-full max-w-[560px] truncate rounded-md border border-transparent bg-transparent px-1 py-0 text-base font-medium tracking-normal text-foreground outline-none transition hover:border-border focus:border-foreground/30 md:py-0.5 md:text-2xl"
                   />
-                  <p className="mt-0.5 truncate px-1 text-[11px] text-muted-foreground">
+                  <p className="truncate px-1 text-[10px] leading-4 text-muted-foreground md:mt-0.5 md:text-[11px]">
                     {client?.name || "Cliente"} — {planning.period_label || "Periodo nao definido"}
                   </p>
                 </div>
               </div>
 
-              <div className="flex w-full flex-wrap items-center justify-center gap-1.5 lg:w-auto lg:justify-end">
-                <TabsList className="h-9 shrink-0 rounded-md border border-border bg-background p-0.5 lg:h-8">
-                  <TabsTrigger value="visual" className="h-8 px-3 py-1 text-xs lg:h-7 lg:px-2.5">
+              <div className="flex w-full min-w-0 flex-nowrap items-center justify-start gap-1 overflow-x-auto lg:w-auto lg:justify-end">
+                <TabsList className="h-8 shrink-0 rounded-md border border-border bg-background p-0.5 lg:h-8">
+                  <TabsTrigger value="visual" className="h-7 px-2.5 py-1 text-[11px] lg:h-7 lg:text-xs">
                     Visual
                   </TabsTrigger>
-                  <TabsTrigger value="documento" className="h-8 px-3 py-1 text-xs lg:h-7 lg:px-2.5">
+                  <TabsTrigger value="documento" className="h-7 px-2.5 py-1 text-[11px] lg:h-7 lg:text-xs">
                     Documento
                   </TabsTrigger>
                 </TabsList>
@@ -405,7 +437,7 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
                   type="button"
                   variant="ghostSecondary"
                   size="sm"
-                  className="h-8 px-2.5 text-xs"
+                  className="h-8 shrink-0 px-2 text-xs md:px-2.5"
                   onClick={copyPublicLink}
                   aria-label="Copiar link publico"
                   title="Copiar link publico"
@@ -413,7 +445,7 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
                   <Clipboard className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">{copied ? "Copiado" : "Copiar link publico"}</span>
                 </Button>
-                <Button asChild variant="ghostSecondary" size="sm" className="h-8 px-2.5 text-xs">
+                <Button asChild variant="ghostSecondary" size="sm" className="h-8 shrink-0 px-2 text-xs md:px-2.5">
                   <Link href={`/p/${planning.public_slug}`} target="_blank" rel="noreferrer" aria-label="Abrir publico" title="Abrir publico">
                     <ExternalLink className="h-3.5 w-3.5" />
                     <span className="hidden sm:inline">Abrir publico</span>
@@ -423,7 +455,7 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
                   type="button"
                   variant="ghostSecondary"
                   size="sm"
-                  className="h-8 px-2.5 text-xs"
+                  className="h-8 shrink-0 px-2 text-xs md:px-2.5"
                   onClick={() => setConfirmArchiveOpen(true)}
                   disabled={archiving}
                   aria-label="Arquivar"
@@ -432,13 +464,13 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
                   <Archive className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">{archiving ? "Arquivando..." : "Arquivar"}</span>
                 </Button>
-                <div className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs text-muted-foreground">
+                <div className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-border bg-background px-2 text-[11px] text-muted-foreground md:px-2.5 md:text-xs">
                   {autosaveStatus === "saving" || autosaveStatus === "pending" ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   ) : autosaveStatus === "saved" ? (
                     <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
                   ) : null}
-                  <span>
+                  <span className="hidden sm:inline">
                     {autosaveStatus === "saving" || autosaveStatus === "pending"
                       ? "Salvando..."
                       : autosaveStatus === "error"
@@ -486,11 +518,11 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
             clientName={client?.name}
             emptyText="Cole ou escreva o conteudo desta secao."
             workspaceLayout
-            toolbarClassName="!top-[calc(var(--planning-header-offset)_+_var(--planning-header-height))] z-40 mb-0 rounded-none border-x-0 border-t-0 border-b border-border px-3 py-2 shadow-none md:px-5"
+            toolbarClassName="!top-[calc(var(--planning-header-offset)_+_var(--planning-header-height))] z-40 mb-0 rounded-none border-x-0 border-t-0 border-b border-border px-2 py-1.5 shadow-none md:px-5 md:py-2"
             sectionNavigationClassName="lg:!top-[var(--planning-side-nav-top)]"
             onImageUpload={uploadPlanningAsset}
             sectionNavigation={
-              <nav className="no-scrollbar flex gap-1 overflow-x-auto border-y border-border bg-background p-2 lg:min-h-[calc(68vh+5rem)] lg:flex-col lg:overflow-visible lg:rounded-xl lg:border lg:p-3.5">
+              <nav className="no-scrollbar flex max-w-full gap-1 overflow-x-auto border-y border-border bg-background p-2 lg:min-h-[calc(68vh+5rem)] lg:flex-col lg:overflow-visible lg:rounded-xl lg:border lg:p-3.5">
                 {copySectionMeta.map((section) => {
                   const isActive = activeSection === section.key;
 
@@ -500,7 +532,7 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
                       type="button"
                       onClick={() => setActiveSection(section.key)}
                       className={cn(
-                        "min-w-max rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors lg:min-w-0 lg:px-4 lg:py-3.5",
+                        "min-w-max shrink-0 rounded-lg px-3 py-2 text-left text-xs font-medium transition-colors lg:min-w-0 lg:px-4 lg:py-3.5 lg:text-sm",
                         isActive
                           ? "bg-foreground text-background"
                           : "text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground",
@@ -566,6 +598,12 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
             width: calc(100vw - 18rem);
             margin-left: calc(50% - ((100vw - 18rem) / 2));
             margin-right: calc(50% - ((100vw - 18rem) / 2));
+          }
+        }
+
+        @media (max-width: 767px) {
+          .planning-editor-shell {
+            overflow-x: hidden;
           }
         }
       `}</style>

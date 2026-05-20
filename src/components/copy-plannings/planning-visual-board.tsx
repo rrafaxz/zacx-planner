@@ -34,6 +34,42 @@ type PlanningVisualBoardProps = {
 };
 
 const defaultAccent = "#DFFF06";
+const weekdayOptions = ["SEGUNDA", "TERÇA", "QUARTA", "QUINTA", "SEXTA", "SÁBADO", "DOMINGO"];
+const formatOptions = ["POST", "CARROSSEL", "STORIES", "VÍDEO", "FOTOS", "TRÁFEGO PAGO"];
+
+function useBodyScrollLock(locked: boolean) {
+  useEffect(() => {
+    if (!locked || typeof window === "undefined") {
+      return;
+    }
+
+    const scrollY = window.scrollY;
+    const { style } = document.body;
+    const originalPosition = style.position;
+    const originalTop = style.top;
+    const originalLeft = style.left;
+    const originalRight = style.right;
+    const originalWidth = style.width;
+    const originalOverflow = style.overflow;
+
+    style.position = "fixed";
+    style.top = `-${scrollY}px`;
+    style.left = "0";
+    style.right = "0";
+    style.width = "100%";
+    style.overflow = "hidden";
+
+    return () => {
+      style.position = originalPosition;
+      style.top = originalTop;
+      style.left = originalLeft;
+      style.right = originalRight;
+      style.width = originalWidth;
+      style.overflow = originalOverflow;
+      window.scrollTo(0, scrollY);
+    };
+  }, [locked]);
+}
 
 function normalizeHexColor(color?: string | null) {
   if (!color || !/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(color)) {
@@ -202,6 +238,9 @@ function displayWeekday(item: PlanningVisualItem) {
 
 function createDraft(item: PlanningVisualItem): PlanningVisualEditValues {
   return {
+    date: item.displayDate || item.date || "",
+    weekday: displayWeekday(item) || "",
+    typeLabel: item.typeLabel || "",
     theme: item.theme || "",
     objective: item.objective || "",
     caption: item.caption || "",
@@ -262,6 +301,8 @@ export function PlanningVisualBoard({
       };
   const overlayColor = isLight ? "rgba(0, 0, 0, 0.35)" : "rgba(0, 0, 0, 0.55)";
 
+  useBodyScrollLock(Boolean(selectedItem));
+
   useEffect(() => {
     if (!selectedItem) {
       setDraft(null);
@@ -321,7 +362,12 @@ export function PlanningVisualBoard({
     try {
       const nextSections = updatePlanningVisualItemInSections(sections, selectedItem, draft);
       await onSectionsChange(nextSections, selectedItem.sourceSection as PlanningVisualSectionKey);
-      const refreshedItem = parsePlanningSections(nextSections).find((item) => item.id === selectedItem.id);
+      const refreshedItem = parsePlanningSections(nextSections).find(
+        (item) =>
+          item.id === selectedItem.id ||
+          (item.sourceSection === selectedItem.sourceSection &&
+            item.sourceStartLine === selectedItem.sourceStartLine),
+      );
       setSelectedItem(refreshedItem || null);
       setIsEditing(false);
       setShowSaveConfirm(false);
@@ -465,6 +511,57 @@ export function PlanningVisualBoard({
                 <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">
                   {itemError}
                 </div>
+              ) : null}
+
+              {isEditing && draft ? (
+                <VisualDetailBlock label="Dados do card" accentColor={selectedColors.detail}>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <label className="grid gap-1.5 text-xs font-medium uppercase text-muted-foreground">
+                      Data
+                      <input
+                        value={draft.date}
+                        onChange={(event) =>
+                          setDraft((current) => (current ? { ...current, date: event.target.value } : current))
+                        }
+                        className={modalInputClass(false)}
+                        placeholder="DD/MM"
+                      />
+                    </label>
+                    <label className="grid gap-1.5 text-xs font-medium uppercase text-muted-foreground">
+                      Dia
+                      <select
+                        value={draft.weekday}
+                        onChange={(event) =>
+                          setDraft((current) => (current ? { ...current, weekday: event.target.value } : current))
+                        }
+                        className={modalInputClass(false)}
+                      >
+                        <option value="">Sem dia</option>
+                        {weekdayOptions.map((weekday) => (
+                          <option key={weekday} value={weekday}>
+                            {weekday}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="grid gap-1.5 text-xs font-medium uppercase text-muted-foreground">
+                      Formato
+                      <select
+                        value={draft.typeLabel}
+                        onChange={(event) =>
+                          setDraft((current) => (current ? { ...current, typeLabel: event.target.value } : current))
+                        }
+                        className={modalInputClass(false)}
+                      >
+                        {formatOptions.map((format) => (
+                          <option key={format} value={format}>
+                            {format}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                </VisualDetailBlock>
               ) : null}
 
               {selectedItem.storyFormat || selectedItem.content ? (

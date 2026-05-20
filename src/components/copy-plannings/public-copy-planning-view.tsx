@@ -12,8 +12,13 @@ import {
   emptyCopySections,
   hasSectionContent,
   parseCopyDocumentContent,
+  serializeCopyDocumentSections,
 } from "@/components/copy-plannings/copy-document";
 import { PlanningVisualBoard } from "@/components/copy-plannings/planning-visual-board";
+import type {
+  PlanningVisualSectionKey,
+  PlanningVisualSections,
+} from "@/components/copy-plannings/planning-visual-parser";
 import { PublicClientHeading } from "@/components/public-view/public-client-heading";
 import { PublicHeader } from "@/components/public-view/public-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -51,7 +56,7 @@ function NotFoundState() {
 }
 
 export function PublicCopyPlanningView({ slug }: PublicCopyPlanningViewProps) {
-  const [planning, setPlanning] = useState<CopyPlanning | null>(null);
+  const [planning, setPlanning] = useState<CopyPlanningWithSectionFields | null>(null);
   const [client, setClient] = useState<Client | null>(null);
   const [sections, setSections] = useState<CopyDocumentSections>({ ...emptyCopySections });
   const [activeSection, setActiveSection] = useState<CopySectionKey>("posts");
@@ -87,7 +92,7 @@ export function PublicCopyPlanningView({ slug }: PublicCopyPlanningViewProps) {
       const planningWithSections = planningData as CopyPlanningWithSectionFields;
       const legacySections = parseCopyDocumentContent(planningWithSections.document_content);
 
-      setPlanning(planningData);
+      setPlanning(planningWithSections);
       setClient(clientData);
       setSections({
         posts: cleanCopySectionHtml("posts", planningWithSections.posts_content ?? legacySections.posts, clientData?.name),
@@ -105,6 +110,37 @@ export function PublicCopyPlanningView({ slug }: PublicCopyPlanningViewProps) {
   useEffect(() => {
     loadPlanning();
   }, [slug]);
+
+  async function savePublicVisualSections(
+    nextSections: PlanningVisualSections,
+    changedSection: PlanningVisualSectionKey,
+  ) {
+    if (!planning) return;
+
+    const nextContent = cleanCopySectionHtml(changedSection, nextSections[changedSection], client?.name);
+    const mergedSections: CopyDocumentSections = {
+      ...sections,
+      ...nextSections,
+      [changedSection]: nextContent,
+    };
+    const serializedSections = serializeCopyDocumentSections(mergedSections);
+    const { error: requestError } = await supabase
+      .from("copy_plannings")
+      .update({ document_content: serializedSections } as never)
+      .eq("id", planning.id)
+      .eq("public_slug", slug)
+      .eq("is_public", true);
+
+    if (requestError) {
+      throw new Error(requestError.message);
+    }
+
+    setSections(mergedSections);
+    setPlanning({
+      ...planning,
+      document_content: serializedSections,
+    });
+  }
 
   const visibleSectionKeys = useMemo(
     () =>
@@ -168,6 +204,8 @@ export function PublicCopyPlanningView({ slug }: PublicCopyPlanningViewProps) {
               sections={sections}
               clientColor={client?.primary_color}
               clientSecondaryColor={client?.secondary_color}
+              editable
+              onSectionsChange={savePublicVisualSections}
             />
           </TabsContent>
 

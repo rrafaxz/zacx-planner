@@ -184,7 +184,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </button>
 
           <Link href="/admin" className="flex min-w-0 justify-center">
-            <ZacxLogo className="h-5 w-auto max-w-[104px] text-[var(--zacx-brand)]" />
+            <SidebarMenuLogo className="h-auto w-10 max-w-10" />
           </Link>
 
           <div aria-hidden="true" />
