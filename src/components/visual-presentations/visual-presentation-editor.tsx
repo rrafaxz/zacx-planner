@@ -32,6 +32,7 @@ import {
 } from "@/components/visual-presentations/visual-item-board";
 import {
   buildStoryImageNotes,
+  buildVisualItemWeekNotes,
   storyImageMetadata,
 } from "@/components/visual-presentations/story-image-notes";
 import {
@@ -1329,6 +1330,8 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
     setError(null);
     setNotice(null);
 
+    const weekNotes = buildVisualItemWeekNotes(selectedWeek?.id, selectedWeek?.index);
+
     const { data: itemData, error: itemError } = await supabase
       .from("visual_items")
       .insert({
@@ -1338,7 +1341,7 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
         weekday: itemWeekday,
         display_date: itemDate,
         order_index: nextOrderIndex(items),
-        notes: null,
+        notes: weekNotes,
         is_visible: true,
       })
       .select("*")
@@ -1431,7 +1434,11 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
       };
 
       if (form.format === "stories") {
-        updatePayload.notes = buildStoryImageNotes(imagesForNotes, form.storyImages);
+        updatePayload.notes = buildStoryImageNotes(imagesForNotes, form.storyImages, {
+          baseNotes: itemData.notes,
+          weekId: selectedWeek?.id,
+          weekIndex: selectedWeek?.index,
+        });
       }
 
       await supabase.from("visual_items").update(updatePayload).eq("id", itemData.id);
@@ -1651,8 +1658,13 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
               displayDate: draft.date,
               weekday: draft.weekday,
             })),
+            {
+              baseNotes: currentItem?.notes,
+              weekId: selectedWeek?.id,
+              weekIndex: selectedWeek?.index,
+            },
           )
-        : currentItem?.notes ?? null;
+        : buildVisualItemWeekNotes(selectedWeek?.id, selectedWeek?.index, currentItem?.notes);
 
     const { error: updateError } = await supabase
       .from("visual_items")
@@ -1948,7 +1960,9 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
       storagePaths.push(...weekImages.flatMap((image) => (image.image_path ? [image.image_path] : [])));
       itemUpdates.push({
         itemId: fullItem.id,
-        notes: buildStoryImageNotes(remainingImages, metadata),
+        notes: buildStoryImageNotes(remainingImages, metadata, {
+          baseNotes: fullItem.notes,
+        }),
         displayDate: firstMetadata?.displayDate ?? fullItem.display_date,
         weekday: firstMetadata?.weekday ?? fullItem.weekday,
       });
@@ -2144,7 +2158,11 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
               weekday: currentMetadata.weekday ?? item.weekday,
             };
       });
-      const notes = buildStoryImageNotes(sortedImages, metadata);
+      const notes = buildStoryImageNotes(sortedImages, metadata, {
+        baseNotes: item.notes,
+        weekId: selectedWeek?.id,
+        weekIndex: selectedWeek?.index,
+      });
       const firstMetadata = metadata[0];
 
       const { error: updateError } = await supabase
@@ -2180,6 +2198,7 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
     const updatePayload = {
       display_date: nextDate ?? item.display_date,
       weekday: nextWeekday ?? item.weekday,
+      notes: buildVisualItemWeekNotes(selectedWeek?.id, selectedWeek?.index, item.notes),
     };
     const { error: updateError } = await supabase
       .from("visual_items")
@@ -2197,6 +2216,7 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
             ...currentItem,
             display_date: updatePayload.display_date,
             weekday: updatePayload.weekday,
+            notes: updatePayload.notes,
           }
         : currentItem,
     );

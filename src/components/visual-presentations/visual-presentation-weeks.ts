@@ -1,7 +1,7 @@
 import { dateWithDots, formatDateInput, isValidDayMonth } from "@/lib/date-mask";
 import type { VisualPresentation } from "@/lib/supabase/types";
 
-import { storyImageMetadata } from "./story-image-notes";
+import { storyImageMetadata, visualItemWeekMetadata } from "./story-image-notes";
 import type { VisualItemWithImages } from "./visual-item-board";
 
 export type VisualPresentationWeek = {
@@ -468,6 +468,23 @@ export function filterVisualItemsForWeek(
   if (!week) return items;
 
   return items.flatMap((item) => {
+    const manualWeek = visualItemWeekMetadata(item.notes);
+    const hasManualWeek = Boolean(manualWeek.weekId) || typeof manualWeek.weekIndex === "number";
+    const belongsToManualWeek =
+      (manualWeek.weekId ? manualWeek.weekId === week.id : true) &&
+      (typeof manualWeek.weekIndex === "number" ? manualWeek.weekIndex === week.index : true);
+    const sortedImages = [...(item.images ?? [])].sort(
+      (left, right) =>
+        (left.order_index ?? 0) - (right.order_index ?? 0) ||
+        `${left.created_at ?? ""}`.localeCompare(`${right.created_at ?? ""}`),
+    );
+
+    if (hasManualWeek) {
+      if (!belongsToManualWeek) return [];
+
+      return itemMode(item) === "stories" ? [{ ...item, images: sortedImages }] : [item];
+    }
+
     if (itemMode(item) !== "stories") {
       const isInWeek = isDayMonthInVisualWeek(item.display_date, week);
       const isFallback = !isValidDayMonth(formatDateInput(item.display_date || "")) && week.index === 0;
@@ -475,11 +492,7 @@ export function filterVisualItemsForWeek(
       return isInWeek || isFallback ? [item] : [];
     }
 
-    const images = [...(item.images ?? [])].sort(
-      (left, right) =>
-        (left.order_index ?? 0) - (right.order_index ?? 0) ||
-        `${left.created_at ?? ""}`.localeCompare(`${right.created_at ?? ""}`),
-    );
+    const images = sortedImages;
 
     if (!images.length) {
       const isInWeek = isDayMonthInVisualWeek(item.display_date, week);
@@ -497,6 +510,13 @@ export function filterVisualItemsForWeek(
       );
     });
     const hasDatedImageInWeek = weekImages.length > 0;
+
+    if (!options.filterStoryImages) {
+      const isInWeek = isDayMonthInVisualWeek(item.display_date, week);
+      const isFallback = !isValidDayMonth(formatDateInput(item.display_date || "")) && week.index === 0;
+
+      return isInWeek || isFallback ? [{ ...item, images }] : [];
+    }
 
     if (!hasDatedImageInWeek) {
       const isInWeek = isDayMonthInVisualWeek(item.display_date, week);
