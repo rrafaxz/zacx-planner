@@ -126,9 +126,10 @@ const typePattern =
   "POSTS?|CARROSSEL|CARROSSEIS|CARROSSÉIS|STOR(?:Y|IES)|V[IÍ]DEOS?|VIDEOS?|REELS?|FOTOS?|TR[AÁ]FEGO\\s+PAGO|TRAFEGO\\s+PAGO";
 const flexibleDatePattern =
   "((?:\\d\\s*){1,2}\\/\\s*(?:\\d\\s*){1,2}(?:\\/\\s*(?:\\d\\s*){2,4})?)";
+const visualSeparatorPattern = "(?:[ \\t]*\\|[ \\t]*|[ \\t]+[-–—][ \\t]+)";
 
 const itemHeaderPattern = new RegExp(
-  `^\\s*${flexibleDatePattern}\\s*(?:\\(([^)]+)\\))?\\s*(?:[-–—|])?\\s*(${typePattern})\\b`,
+  `^\\s*${flexibleDatePattern}\\s*(?:\\(([^)]+)\\))?\\s*(?:${visualSeparatorPattern}(?:(.+?)${visualSeparatorPattern})?)?(${typePattern})\\b`,
   "iu",
 );
 const storyWeekHeaderPattern = new RegExp(
@@ -136,7 +137,7 @@ const storyWeekHeaderPattern = new RegExp(
   "i",
 );
 const storyScheduleLinePattern = new RegExp(
-  `^\\s*${flexibleDatePattern}\\s*(?:\\(([^)]+)\\))?\\s*(?:[-–—|])\\s*(.+)$`,
+  `^\\s*${flexibleDatePattern}\\s*(?:\\(([^)]+)\\))?\\s*${visualSeparatorPattern}(?:(.+?)${visualSeparatorPattern})?(.+)$`,
   "iu",
 );
 const knownStoryFormats = [
@@ -158,7 +159,7 @@ const knownStoryFormats = [
 
 function createGlobalHeaderPattern() {
   return new RegExp(
-    `${flexibleDatePattern}[\\s\\r\\n]*(?:\\(([^)]+)\\))?[\\s\\r\\n]*(?:[-–—|])?[\\s\\r\\n]*(${typePattern})\\b`,
+    `${flexibleDatePattern}[\\s\\r\\n]*(?:\\(([^)]+)\\))?[\\s\\r\\n]*(?:${visualSeparatorPattern}(?:(.+?)${visualSeparatorPattern})?)?(${typePattern})\\b`,
     "giu",
   );
 }
@@ -189,7 +190,9 @@ function normalizePlanningText(text: string) {
 }
 
 function textToPlainLines(text: string): string[] {
-  return normalizePlanningText(text).split("\n").map(cleanLine).filter(Boolean);
+  const normalizedText = normalizePlanningText(text);
+
+  return normalizedText ? normalizedText.split("\n").map(cleanLine) : [];
 }
 
 function escapeHtml(value: string) {
@@ -250,22 +253,28 @@ function parseDateParts(value: string): ParsedDate | null {
 }
 
 function normalizeWeekday(value?: string) {
-  const cleanValue = cleanLine(value || "");
+  const cleanValue = cleanLine(value || "").replace(/[()]/g, "");
 
   if (!cleanValue) {
     return "";
   }
 
-  return cleanValue
-    .split(/(\s|-)/)
-    .map((part) => {
-      if (part === " " || part === "-") {
-        return part;
-      }
+  const normalized = stripAccents(cleanValue)
+    .toLowerCase()
+    .replace(/\./g, "")
+    .replace(/-/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
-      return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
-    })
-    .join("");
+  if (["seg", "segunda", "segunda feira"].includes(normalized)) return "SEGUNDA";
+  if (["ter", "terca", "terca feira"].includes(normalized)) return "TERÇA";
+  if (["qua", "quarta", "quarta feira"].includes(normalized)) return "QUARTA";
+  if (["qui", "quinta", "quinta feira"].includes(normalized)) return "QUINTA";
+  if (["sex", "sexta", "sexta feira"].includes(normalized)) return "SEXTA";
+  if (["sab", "sabado"].includes(normalized)) return "SÁBADO";
+  if (["dom", "domingo"].includes(normalized)) return "DOMINGO";
+
+  return "";
 }
 
 function normalizeType(type: string): { type: PlanningVisualType; typeLabel: string } | null {
@@ -392,10 +401,14 @@ export function htmlToPlainLines(html: string): string[] {
   const document = parser.parseFromString(html, "text/html");
   const chunks: string[] = [];
 
-  function pushBreak() {
+  function pushBreak(count = 1) {
     const lastChunk = chunks[chunks.length - 1];
 
     if (lastChunk !== "\n") {
+      chunks.push("\n");
+    }
+
+    for (let index = 1; index < count; index += 1) {
       chunks.push("\n");
     }
   }
@@ -425,7 +438,7 @@ export function htmlToPlainLines(html: string): string[] {
     node.childNodes.forEach(walk);
 
     if (blockElements.has(tagName)) {
-      pushBreak();
+      pushBreak(tagName === "li" || tagName === "tr" || tagName === "td" || tagName === "th" ? 1 : 2);
     }
   }
 
@@ -442,7 +455,7 @@ function parseHeader(line: string): ParsedHeader | null {
   }
 
   const date = parseDateParts(match[1]);
-  const normalizedType = normalizeType(match[3]);
+  const normalizedType = normalizeType(match[4]);
 
   if (!date || !normalizedType) {
     return null;
@@ -450,7 +463,7 @@ function parseHeader(line: string): ParsedHeader | null {
 
   return {
     ...date,
-    weekday: normalizeWeekday(match[2]),
+    weekday: normalizeWeekday(match[2]) || normalizeWeekday(match[3]),
     ...normalizedType,
   };
 }
@@ -528,7 +541,11 @@ function parseMarker(line: string): { target: MarkerTarget; value: string } | nu
 }
 
 function appendValue(currentValue: string, nextLine: string) {
-  return [currentValue, nextLine].filter(Boolean).join("\n");
+  if (!currentValue) {
+    return nextLine;
+  }
+
+  return `${currentValue}\n${nextLine}`;
 }
 
 function findSubItem(items: PlanningVisualSubItem[], marker: Extract<MarkerTarget, object>) {
@@ -704,7 +721,7 @@ export function parseItemBlock(
   };
   let activeTarget: MarkerTarget | null = null;
 
-  bodyLines.map(cleanLine).filter(Boolean).forEach((line) => {
+  bodyLines.map(cleanLine).forEach((line) => {
     const marker = parseMarker(line);
 
     if (marker) {
@@ -763,7 +780,7 @@ function parseStoriesScheduleLine(
     return null;
   }
 
-  const { storyFormat, text } = splitStoryFormatAndText(match[3]);
+  const { storyFormat, text } = splitStoryFormatAndText(match[4]);
   const storyText = cleanLine(text);
   const cleanStoryFormat = cleanLine(storyFormat);
 
@@ -776,7 +793,7 @@ function parseStoriesScheduleLine(
     date: date.date,
     displayDate: date.displayDate,
     year: date.year,
-    weekday: normalizeWeekday(match[2]),
+    weekday: normalizeWeekday(match[2]) || normalizeWeekday(match[3]),
     type: "stories",
     typeLabel: "STORIES",
     objective: "",
@@ -935,10 +952,38 @@ function normalizeSubItems(items: PlanningVisualSubItem[]) {
   return items
     .map((item, index) => ({
       label: item.label || `Item ${index + 1}`,
-      text: cleanLine(item.text),
+      text: normalizePlanningText(item.text).trim(),
       index: item.index || index + 1,
     }))
     .filter((item) => item.text);
+}
+
+function multilineValueLines(value: string) {
+  const lines = normalizePlanningText(value).split("\n");
+
+  while (lines.length && !lines[0].trim()) {
+    lines.shift();
+  }
+
+  while (lines.length && !lines[lines.length - 1].trim()) {
+    lines.pop();
+  }
+
+  return lines;
+}
+
+function pushLabeledMultiline(lines: string[], label: string, value: string) {
+  const valueLines = multilineValueLines(value);
+
+  if (!valueLines.length) {
+    return;
+  }
+
+  lines.push(`${label}: ${valueLines[0]}`);
+
+  if (valueLines.length > 1) {
+    lines.push(...valueLines.slice(1));
+  }
 }
 
 function buildStandardItemLines(item: PlanningVisualItem, values: PlanningVisualEditValues) {
@@ -947,17 +992,17 @@ function buildStandardItemLines(item: PlanningVisualItem, values: PlanningVisual
   const typeLabel = cleanLine(values.typeLabel || item.typeLabel).toUpperCase();
   const headerLine = `${date}${weekday ? ` (${weekday})` : ""} — ${typeLabel}`;
   const lines = [headerLine];
-  const objective = cleanLine(values.objective);
-  const theme = cleanLine(values.theme);
-  const caption = values.caption.trim();
-  const script = values.script.trim();
+  const objective = normalizePlanningText(values.objective).trim();
+  const theme = normalizePlanningText(values.theme).trim();
+  const caption = normalizePlanningText(values.caption).trim();
+  const script = normalizePlanningText(values.script).trim();
 
   if (objective) {
-    lines.push(`OBJETIVO: ${objective}`);
+    pushLabeledMultiline(lines, "OBJETIVO", objective);
   }
 
   if (theme && item.type !== "carousel" && item.type !== "stories") {
-    lines.push(`TEMA: ${theme}`);
+    pushLabeledMultiline(lines, "TEMA", theme);
   }
 
   if (theme && item.type === "post") {
@@ -970,7 +1015,7 @@ function buildStandardItemLines(item: PlanningVisualItem, values: PlanningVisual
 
   if (item.type === "carousel") {
     normalizeSubItems(values.slides).forEach((slide, index) => {
-      lines.push(`Slide ${slide.index || index + 1}: ${slide.text}`);
+      pushLabeledMultiline(lines, `Slide ${slide.index || index + 1}`, slide.text);
     });
 
     if (!values.slides.length && theme) {
@@ -980,7 +1025,7 @@ function buildStandardItemLines(item: PlanningVisualItem, values: PlanningVisual
 
   if (item.type === "stories") {
     normalizeSubItems(values.stories).forEach((story, index) => {
-      lines.push(`Story ${story.index || index + 1}: ${story.text}`);
+      pushLabeledMultiline(lines, `Story ${story.index || index + 1}`, story.text);
     });
 
     if (!values.stories.length && theme) {
@@ -990,12 +1035,12 @@ function buildStandardItemLines(item: PlanningVisualItem, values: PlanningVisual
 
   if (item.type === "video" && script) {
     lines.push("ROTEIRO:");
-    lines.push(...compactLines(script.split("\n")));
+    lines.push(...multilineValueLines(script));
   }
 
   if (caption) {
     lines.push("LEGENDA:");
-    lines.push(...compactLines(caption.split("\n")));
+    lines.push(...multilineValueLines(caption));
   }
 
   return lines;

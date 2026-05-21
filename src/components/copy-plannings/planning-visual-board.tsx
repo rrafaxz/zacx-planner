@@ -229,6 +229,21 @@ function modalInputClass(multiline = false) {
   );
 }
 
+function VisualText({ value, fallback }: { value?: string | null; fallback: string }) {
+  const text = value?.trim() || fallback;
+  const paragraphs = text.split(/\n{2,}/).map((paragraph) => paragraph.trim()).filter(Boolean);
+
+  return (
+    <div className="space-y-3 text-sm leading-7 text-foreground">
+      {(paragraphs.length ? paragraphs : [text]).map((paragraph, index) => (
+        <p key={`${paragraph}-${index}`} className="whitespace-pre-wrap">
+          {paragraph}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 function displayWeekday(item: PlanningVisualItem) {
   return item.weekday
     ? item.weekday.toUpperCase()
@@ -561,14 +576,12 @@ export function PlanningVisualBoard({
                         className={modalInputClass(false)}
                       />
                     ) : (
-                      <p className="text-sm leading-6 text-foreground">{selectedItem.storyFormat}</p>
+                      <VisualText value={selectedItem.storyFormat} fallback="Formato não informado" />
                     )}
                   </VisualDetailBlock>
 
                   <VisualDetailBlock label="Tema da semana" accentColor={selectedColors.detail}>
-                    <p className="text-sm leading-6 text-foreground">
-                      {selectedItem.weekTheme || "Tema da semana nao informado"}
-                    </p>
+                    <VisualText value={selectedItem.weekTheme} fallback="Tema da semana nao informado" />
                   </VisualDetailBlock>
 
                   <VisualDetailBlock
@@ -587,9 +600,7 @@ export function PlanningVisualBoard({
                         className={modalInputClass(true)}
                       />
                     ) : (
-                      <p className="whitespace-pre-wrap text-sm leading-6 text-foreground">
-                        {selectedItem.content}
-                      </p>
+                      <VisualText value={selectedItem.content} fallback="Texto nao informado" />
                     )}
                   </VisualDetailBlock>
                 </>
@@ -609,9 +620,7 @@ export function PlanningVisualBoard({
                         className={modalInputClass(true)}
                       />
                     ) : (
-                      <p className="whitespace-pre-wrap text-sm leading-6 text-foreground">
-                        {selectedItem.objective || "Objetivo nao informado"}
-                      </p>
+                      <VisualText value={selectedItem.objective} fallback="Objetivo nao informado" />
                     )}
                   </VisualDetailBlock>
 
@@ -633,9 +642,7 @@ export function PlanningVisualBoard({
                           className={modalInputClass(true)}
                         />
                       ) : (
-                        <p className="whitespace-pre-wrap text-sm leading-6 text-foreground">
-                          {selectedItem.theme || "Tema não informado"}
-                        </p>
+                        <VisualText value={selectedItem.theme} fallback="Tema não informado" />
                       )}
                     </VisualDetailBlock>
                   ) : null}
@@ -661,7 +668,7 @@ export function PlanningVisualBoard({
                               className={modalInputClass(true)}
                             />
                           ) : (
-                            <p className="whitespace-pre-wrap text-sm leading-6 text-foreground">{slide.text}</p>
+                            <VisualText value={slide.text} fallback="Slide sem texto" />
                           )}
                         </VisualDetailBlock>
                       ))
@@ -688,7 +695,7 @@ export function PlanningVisualBoard({
                               className={modalInputClass(true)}
                             />
                           ) : (
-                            <p className="whitespace-pre-wrap text-sm leading-6 text-foreground">{story.text}</p>
+                            <VisualText value={story.text} fallback="Story sem texto" />
                           )}
                         </VisualDetailBlock>
                       ))
@@ -709,9 +716,7 @@ export function PlanningVisualBoard({
                           className={modalInputClass(true)}
                         />
                       ) : (
-                        <p className="whitespace-pre-wrap text-sm leading-6 text-foreground">
-                          {selectedItem.script || "Roteiro nao informado"}
-                        </p>
+                        <VisualText value={selectedItem.script} fallback="Roteiro nao informado" />
                       )}
                     </VisualDetailBlock>
                   ) : null}
@@ -730,9 +735,7 @@ export function PlanningVisualBoard({
                         className={modalInputClass(true)}
                       />
                     ) : (
-                      <p className="whitespace-pre-wrap text-sm leading-6 text-foreground">
-                        {selectedItem.caption || "Legenda nao informada"}
-                      </p>
+                      <VisualText value={selectedItem.caption} fallback="Legenda nao informada" />
                     )}
                   </VisualDetailBlock>
                 </>

@@ -128,6 +128,7 @@ const accentColorToken = "accent";
 const documentFontFamily = "Poppins";
 const documentHeadingFontFamily = "Sora";
 const supportedPlanningImageTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
+const internalDocumentClassPrefixes = ["planning-doc-", "copy-document-"];
 const transferableTextStyleProperties = [
   "color",
   "background-color",
@@ -138,6 +139,7 @@ const transferableTextStyleProperties = [
   "line-height",
   "text-decoration",
   "text-decoration-line",
+  "text-align",
 ];
 
 const FontSize = Extension.create({
@@ -1384,6 +1386,144 @@ function normalizeSupportedFontFamily(value: string | null | undefined, fallback
   return fallback;
 }
 
+function normalizeFontSize(value: string | null | undefined) {
+  const normalizedValue = `${value || ""}`.trim().toLowerCase();
+  const match = normalizedValue.match(/^(\d+(?:\.\d+)?)(px|pt)$/);
+
+  if (!match) return null;
+
+  const [, amountText, unit] = match;
+  const pxValue = unit === "pt" ? Number(amountText) * (4 / 3) : Number(amountText);
+
+  if (!Number.isFinite(pxValue)) return null;
+
+  const clampedValue = Math.min(96, Math.max(7, Math.round(pxValue)));
+
+  return `${clampedValue}px`;
+}
+
+function normalizeFontWeight(value: string | null | undefined) {
+  const normalizedValue = `${value || ""}`.trim().toLowerCase();
+
+  if (!normalizedValue) return null;
+  if (normalizedValue === "normal") return "400";
+  if (normalizedValue === "bold" || normalizedValue === "bolder") return "700";
+  if (normalizedValue === "lighter") return "300";
+
+  const parsedValue = Number(normalizedValue);
+
+  if (!Number.isFinite(parsedValue)) return null;
+
+  const roundedValue = Math.round(parsedValue / 100) * 100;
+
+  return String(Math.min(900, Math.max(100, roundedValue)));
+}
+
+function normalizeLineHeight(value: string | null | undefined) {
+  const normalizedValue = `${value || ""}`.trim().toLowerCase();
+
+  if (!normalizedValue || normalizedValue === "normal") return null;
+
+  if (/^\d+(\.\d+)?$/.test(normalizedValue)) {
+    const parsedValue = Number(normalizedValue);
+
+    if (Number.isFinite(parsedValue) && parsedValue >= 1 && parsedValue <= 2.4) {
+      return String(parsedValue);
+    }
+  }
+
+  if (/^\d+(\.\d+)?px$/.test(normalizedValue)) {
+    const parsedValue = Number(normalizedValue.replace("px", ""));
+
+    if (Number.isFinite(parsedValue) && parsedValue >= 10 && parsedValue <= 80) {
+      return `${Math.round(parsedValue)}px`;
+    }
+  }
+
+  return null;
+}
+
+function safeCssColor(value: string | null | undefined) {
+  const normalizedValue = `${value || ""}`.trim();
+  const lowerValue = normalizedValue.toLowerCase();
+
+  if (!normalizedValue || lowerValue.includes("javascript:") || lowerValue.includes("expression(") || lowerValue.includes("url(")) {
+    return null;
+  }
+
+  return normalizedValue;
+}
+
+function normalizeTextStyle(element: HTMLElement) {
+  const isStructuralNode = element.matches("[data-planning-image], [data-planning-shape], [data-planning-box]");
+  const isStructuralImage = element.matches("img.planning-doc-image, .planning-doc-image-node, .planning-doc-shape");
+
+  if (isStructuralNode || isStructuralImage) {
+    return;
+  }
+
+  const style = element.style;
+  const nextStyles: string[] = [];
+  const isInsideHeading = Boolean(element.closest("h1, h2, h3, h4, h5, h6"));
+  const fontFamily = style.getPropertyValue("font-family");
+  const fontSize = normalizeFontSize(style.getPropertyValue("font-size"));
+  const fontWeight = normalizeFontWeight(style.getPropertyValue("font-weight"));
+  const lineHeight = normalizeLineHeight(style.getPropertyValue("line-height"));
+  const color = safeCssColor(style.getPropertyValue("color"));
+  const backgroundColor = safeCssColor(style.getPropertyValue("background-color"));
+  const fontStyle = style.getPropertyValue("font-style").trim().toLowerCase();
+  const textDecoration = style.getPropertyValue("text-decoration").trim().toLowerCase();
+  const textDecorationLine = style.getPropertyValue("text-decoration-line").trim().toLowerCase();
+  const textAlign = style.getPropertyValue("text-align").trim().toLowerCase();
+
+  if (fontFamily) {
+    nextStyles.push(`font-family: ${normalizeSupportedFontFamily(fontFamily, isInsideHeading ? documentHeadingFontFamily : documentFontFamily)}`);
+  }
+
+  if (fontSize) nextStyles.push(`font-size: ${fontSize}`);
+  if (fontWeight) nextStyles.push(`font-weight: ${fontWeight}`);
+  if (fontStyle === "italic" || fontStyle === "normal") nextStyles.push(`font-style: ${fontStyle}`);
+  if (lineHeight) nextStyles.push(`line-height: ${lineHeight}`);
+  if (color) nextStyles.push(`color: ${color}`);
+  if (backgroundColor && backgroundColor !== "transparent") nextStyles.push(`background-color: ${backgroundColor}`);
+  if (textDecoration.includes("underline")) {
+    nextStyles.push("text-decoration: underline");
+  } else if (textDecoration.includes("line-through")) {
+    nextStyles.push("text-decoration: line-through");
+  } else if (textDecoration === "none") {
+    nextStyles.push("text-decoration: none");
+  }
+
+  if (textDecorationLine.includes("underline")) {
+    nextStyles.push("text-decoration-line: underline");
+  } else if (textDecorationLine.includes("line-through")) {
+    nextStyles.push("text-decoration-line: line-through");
+  } else if (textDecorationLine === "none") {
+    nextStyles.push("text-decoration-line: none");
+  }
+  if (["left", "center", "right", "justify"].includes(textAlign)) nextStyles.push(`text-align: ${textAlign}`);
+
+  if (nextStyles.length) {
+    element.setAttribute("style", nextStyles.join("; "));
+  } else {
+    element.removeAttribute("style");
+  }
+}
+
+function normalizeDocumentClassNames(document: Document) {
+  document.body.querySelectorAll<HTMLElement>("[class]").forEach((element) => {
+    const internalClassNames = Array.from(element.classList).filter((className) =>
+      internalDocumentClassPrefixes.some((prefix) => className.startsWith(prefix)),
+    );
+
+    if (internalClassNames.length) {
+      element.setAttribute("class", internalClassNames.join(" "));
+    } else {
+      element.removeAttribute("class");
+    }
+  });
+}
+
 function normalizeDocumentFontFamilies(document: Document) {
   document.body.querySelectorAll<HTMLElement>("font[face]").forEach((element) => {
     const nextFontFamily = normalizeSupportedFontFamily(element.getAttribute("face"));
@@ -1393,17 +1533,20 @@ function normalizeDocumentFontFamilies(document: Document) {
   });
 
   document.body.querySelectorAll<HTMLElement>("*").forEach((element) => {
-    const isHeading = Boolean(element.closest("h1, h2, h3, h4, h5, h6"));
+    const isHeadingElement = element.matches("h1, h2, h3, h4, h5, h6");
+    const isInsideHeading = Boolean(element.closest("h1, h2, h3, h4, h5, h6"));
     const currentFontFamily = element.style.getPropertyValue("font-family");
 
-    if (isHeading) {
+    if (currentFontFamily) {
+      element.style.setProperty(
+        "font-family",
+        normalizeSupportedFontFamily(currentFontFamily, isInsideHeading ? documentHeadingFontFamily : documentFontFamily),
+      );
+    } else if (isHeadingElement) {
       element.style.setProperty("font-family", documentHeadingFontFamily);
-      return;
     }
 
-    if (currentFontFamily) {
-      element.style.setProperty("font-family", normalizeSupportedFontFamily(currentFontFamily));
-    }
+    normalizeTextStyle(element);
   });
 }
 
@@ -1423,6 +1566,7 @@ export function sanitizeHtml(html?: string | null) {
   inlineClassStyles(document);
   moveBlockTextStylesToInlineSpans(document);
   normalizeDocumentFontFamilies(document);
+  normalizeDocumentClassNames(document);
 
   blockedSelectors.forEach((selector) => {
     document.querySelectorAll(selector).forEach((node) => node.remove());
@@ -1780,6 +1924,14 @@ function applyTextStyle(editor: Editor | null, attributes: Record<string, string
   }
 
   editor.chain().focus().setMark("textStyle", attributes).run();
+}
+
+function applyFontFamily(editor: Editor | null, fontFamily: string) {
+  if (!isEditorReady(editor)) {
+    return;
+  }
+
+  editor.chain().focus().setFontFamily(normalizeSupportedFontFamily(fontFamily)).run();
 }
 
 function applySemanticColor(editor: Editor | null, token: typeof bodyColorToken | typeof accentColorToken) {
@@ -3491,7 +3643,7 @@ function Toolbar({ editor, theme, className, onImageUpload }: ToolbarProps) {
         className="h-9 min-w-[82px] shrink-0 rounded-xl border border-black/10 bg-transparent px-2 text-xs text-foreground outline-none transition hover:border-black/20 dark:border-white/10 dark:hover:border-white/20 md:px-3"
         defaultValue={documentFontFamily}
         disabled={!editorReady}
-        onChange={(event) => applyTextStyle(editor, { fontFamily: event.target.value })}
+        onChange={(event) => applyFontFamily(editor, event.target.value)}
       >
         {fontOptions.map((font) => (
           <option key={font} value={font}>
@@ -3854,6 +4006,14 @@ export function CopyDocument({
           font-family: var(--font-poppins), Poppins, sans-serif;
           white-space: pre-wrap;
           word-break: break-word;
+        }
+
+        .tiptap-copy-editor .ProseMirror [style*="font-family: Poppins"] {
+          font-family: var(--font-poppins), Poppins, sans-serif !important;
+        }
+
+        .tiptap-copy-editor .ProseMirror [style*="font-family: Sora"] {
+          font-family: var(--font-sora), Sora, var(--font-poppins), Poppins, sans-serif !important;
         }
 
         .copy-document-editor-light .ProseMirror {
