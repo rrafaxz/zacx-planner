@@ -36,6 +36,8 @@ import {
   getMonthNameFromDayMonth,
   isValidDayMonth,
 } from "@/lib/date-mask";
+import { canSeeClient, isAdminUser } from "@/lib/auth/types";
+import { useCurrentUser } from "@/lib/auth/current-user";
 import { optimizeImage } from "@/lib/image-optimizer";
 import { supabase } from "@/lib/supabase/client";
 import type { Client, CopyPlanning, VisualItem, VisualItemImage, VisualPresentation } from "@/lib/supabase/types";
@@ -812,6 +814,8 @@ function EmptyLibraryState({
 
 export function ClientDetail({ clientId }: ClientDetailProps) {
   const router = useRouter();
+  const { user: currentUser, loading: userLoading } = useCurrentUser();
+  const isAdmin = isAdminUser(currentUser);
   const [client, setClient] = useState<Client | null>(null);
   const [copyPlannings, setCopyPlannings] = useState<CopyPlanningWithPreview[]>([]);
   const [visualPresentations, setVisualPresentations] = useState<VisualPresentation[]>([]);
@@ -858,6 +862,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
   const [creationError, setCreationError] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
+  const [accessDenied, setAccessDenied] = useState(false);
 
   async function loadVisualThumbnails(presentations: VisualPresentation[], clientName?: string | null) {
     const presentationIds = presentations.map((presentation) => presentation.id);
@@ -1030,8 +1035,14 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
   }
 
   async function loadClient() {
+    if (!currentUser) {
+      if (!userLoading) setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
+    setAccessDenied(false);
 
     const [clientResult, copyResult, visualResult] = await Promise.all([
       supabase.from("clients").select("*").eq("id", clientId).is("deleted_at", null).maybeSingle(),
@@ -1054,6 +1065,15 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
     if (firstError) {
       setError(firstError.message);
     } else {
+      if (clientResult.data && !canSeeClient(currentUser, clientResult.data)) {
+        setClient(null);
+        setCopyPlannings([]);
+        setVisualPresentations([]);
+        setAccessDenied(true);
+        setLoading(false);
+        return;
+      }
+
       const visualData = ((visualResult.data ?? []) as VisualPresentation[]).sort((a, b) => createdTime(b) - createdTime(a));
       const enrichedVisualData = await loadVisualThumbnails(visualData, clientResult.data?.name);
 
@@ -1079,7 +1099,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
   useEffect(() => {
     setOrigin(window.location.origin);
     loadClient();
-  }, [clientId]);
+  }, [clientId, currentUser?.id, userLoading]);
 
   useEffect(() => {
     setPlanningSelectionMode(false);
@@ -1711,7 +1731,12 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
         clientProfileForm.secondaryColor ||
         clientProfileForm.primaryColor ||
         "#A3E635",
-      responsible_name: clientProfileForm.responsibleName || null,
+      ...(isAdmin
+        ? {
+            responsible_name: clientProfileForm.responsibleName || null,
+            assigned_user_name: clientProfileForm.responsibleName || null,
+          }
+        : {}),
       updated_at: new Date().toISOString(),
     };
 
@@ -1813,7 +1838,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
         </Button>
         <Card>
           <CardContent className="pt-5 text-sm text-muted-foreground">
-            Cliente nao encontrado.
+            {accessDenied ? "Você não tem acesso a este cliente." : "Cliente nao encontrado."}
           </CardContent>
         </Card>
       </section>
@@ -2802,6 +2827,7 @@ export function ClientDetail({ clientId }: ClientDetailProps) {
                       responsibleName: event.target.value,
                     }))
                   }
+                  disabled={!isAdmin}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground transition-colors focus-visible:outline-none focus-visible:ring-0 focus-visible:border-neutral-400 dark:focus-visible:border-white/35"
                 >
                   <option value="">Sem responsável</option>

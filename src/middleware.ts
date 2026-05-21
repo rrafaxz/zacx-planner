@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 
 const ADMIN_COOKIE_NAME = "zacx_admin_session";
 
+function getSessionSecret() {
+  return (
+    process.env.ADMIN_SESSION_SECRET?.trim() ||
+    (process.env.NODE_ENV !== "production" ? "zacx-local-session-secret" : "")
+  );
+}
+
 function isProtectedRoute(pathname: string) {
   return pathname === "/admin" || pathname.startsWith("/admin/");
 }
@@ -10,7 +17,7 @@ export function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
 
   const sessionCookie = request.cookies.get(ADMIN_COOKIE_NAME)?.value;
-  const expectedSession = process.env.ADMIN_SESSION_SECRET;
+  const expectedSession = getSessionSecret();
 
   const isLoggedIn =
     Boolean(expectedSession) && sessionCookie === expectedSession;

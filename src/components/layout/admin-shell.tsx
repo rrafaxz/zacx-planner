@@ -5,10 +5,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BarChart3,
+  CalendarCheck2,
   ChevronLeft,
   ChevronRight,
   HardDrive,
   LayoutGrid,
+  LogOut,
   Menu,
   Moon,
   Sun,
@@ -21,12 +23,15 @@ import { PwaInstallButton } from "@/components/pwa-install-button";
 import { useTheme } from "@/components/theme/theme-provider";
 import { ZacxLogo } from "@/components/zacx-logo";
 import { SidebarMenuLogo } from "@/components/sidebar-menu-logo";
+import { CurrentUserProvider, useCurrentUser } from "@/lib/auth/current-user";
+import { isAdminUser, type CurrentAppUser } from "@/lib/auth/types";
 import { supabase } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/admin", label: "Visao geral", icon: BarChart3 },
   { href: "/admin/atividades", label: "Geral", icon: LayoutGrid },
+  { href: "/admin/postagens", label: "Postagens", icon: CalendarCheck2 },
   { href: "/admin/clientes", label: "Clientes", icon: UsersRound },
 ];
 
@@ -113,9 +118,67 @@ function StorageUsageMenuItem({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function SidebarFooter({ compact = false }: { compact?: boolean }) {
+function UserMenuItem({
+  compact = false,
+  user,
+  onLogout,
+}: {
+  compact?: boolean;
+  user: CurrentAppUser | null;
+  onLogout: () => void;
+}) {
+  const roleLabel = isAdminUser(user) ? "Administrador" : "Usuário";
+
+  if (compact) {
+    return (
+      <button
+        type="button"
+        onClick={onLogout}
+        className="flex h-11 items-center justify-center rounded-md px-0 text-sm text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
+        title={user ? `${user.name} · Sair` : "Sair"}
+        aria-label={user ? `${user.name} · Sair` : "Sair"}
+      >
+        <LogOut className="h-4 w-4" />
+      </button>
+    );
+  }
+
+  return (
+    <div className="rounded-md border border-border bg-background px-3 py-2.5">
+      <div className="flex items-center gap-3">
+        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-foreground/[0.06] text-xs font-semibold text-foreground">
+          {user?.name?.slice(0, 2).toUpperCase() || "US"}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-foreground">{user?.name || "Usuário"}</p>
+          <p className="truncate text-xs text-muted-foreground">{roleLabel}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onLogout}
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
+          aria-label="Sair"
+          title="Sair"
+        >
+          <LogOut className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SidebarFooter({
+  compact = false,
+  user,
+  onLogout,
+}: {
+  compact?: boolean;
+  user: CurrentAppUser | null;
+  onLogout: () => void;
+}) {
   return (
     <nav className="grid gap-2">
+      <UserMenuItem compact={compact} user={user} onLogout={onLogout} />
       <ThemeMenuButton compact={compact} />
       <StorageUsageMenuItem compact={compact} />
       <PwaInstallButton compact={compact} />
@@ -145,8 +208,9 @@ function ThemeMenuButton({ compact = false }: { compact?: boolean }) {
   );
 }
 
-export function AdminShell({ children }: { children: React.ReactNode }) {
+function AdminShellContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { user } = useCurrentUser();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -166,6 +230,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
       return nextValue;
     });
+  }
+
+  async function handleLogout() {
+    await fetch("/api/logout", { method: "POST" });
+    window.location.href = "/login";
   }
 
   return (
@@ -236,7 +305,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
               </nav>
               <div className="absolute bottom-4 left-4 right-4">
-                <SidebarFooter />
+                <SidebarFooter user={user} onLogout={handleLogout} />
               </div>
             </aside>
           </div>
@@ -328,7 +397,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <nav className="absolute bottom-5 left-4 right-4 grid gap-2">
-          <SidebarFooter compact={isCollapsed} />
+          <SidebarFooter compact={isCollapsed} user={user} onLogout={handleLogout} />
         </nav>
       </aside>
 
@@ -341,5 +410,13 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <div className="mx-auto w-full max-w-6xl min-w-0">{children}</div>
       </main>
     </div>
+  );
+}
+
+export function AdminShell({ children }: { children: React.ReactNode }) {
+  return (
+    <CurrentUserProvider>
+      <AdminShellContent>{children}</AdminShellContent>
+    </CurrentUserProvider>
   );
 }

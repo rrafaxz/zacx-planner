@@ -40,6 +40,7 @@ function AdminLoginLogo({ className }: { className?: string }) {
 export default function LoginPage() {
   const router = useRouter();
 
+  const [userSlug, setUserSlug] = useState("adm");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -68,13 +69,13 @@ export default function LoginPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ slug: userSlug, password }),
       });
 
       const data = await response.json();
 
       if (!response.ok || !data.ok) {
-        setError("Senha incorreta");
+        setError(data.message || "Senha incorreta");
         setLoading(false);
         return;
       }
@@ -103,14 +104,27 @@ export default function LoginPage() {
         >
           <div className="text-center">
             <h1 className="sora-heading text-2xl font-semibold tracking-normal text-zinc-950">
-              Acesso ADM
+              Acesso Zacx Planner
             </h1>
             <p className="mt-2 text-sm text-zinc-500">
-              Entre com a senha administrativa.
+              Escolha o usuário e entre com a senha.
             </p>
           </div>
 
           <div className="mt-8 space-y-3">
+            <label htmlFor="userSlug" className="sr-only">
+              Usuário
+            </label>
+            <select
+              id="userSlug"
+              value={userSlug}
+              onChange={(event) => setUserSlug(event.target.value)}
+              className="h-12 w-full rounded-lg border border-zinc-300 bg-white px-4 text-base text-zinc-950 outline-none transition-colors focus:border-[#0015FF]"
+            >
+              <option value="adm">ADM</option>
+              <option value="rafael">Rafael</option>
+              <option value="matheus">Matheus</option>
+            </select>
             <label htmlFor="password" className="sr-only">
               Senha
             </label>

@@ -21,6 +21,16 @@ export type PresentationType =
 
 export type ResponsibleName = "Rafael" | "Matheus";
 
+export type AppUser = {
+  id: string;
+  name: string;
+  slug: string;
+  role: "admin" | "user" | string | null;
+  active: boolean | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
 export type Client = {
   id: string;
   name: string;
@@ -28,6 +38,8 @@ export type Client = {
   logo_url: string | null;
   primary_color: string | null;
   secondary_color?: string | null;
+  assigned_user_id?: string | null;
+  assigned_user_name?: string | null;
   responsible_name?: ResponsibleName | string | null;
   sort_order?: number | null;
   archived_at?: string | null;
@@ -197,6 +209,8 @@ export type Database = {
           logo_url?: string | null;
           primary_color?: string | null;
           secondary_color?: string | null;
+          assigned_user_id?: string | null;
+          assigned_user_name?: string | null;
           responsible_name?: ResponsibleName | string | null;
           sort_order?: number | null;
           archived_at?: string | null;
@@ -205,6 +219,19 @@ export type Database = {
           updated_at?: string | null;
         },
         Partial<Omit<Client, "id" | "created_at">>
+      >;
+      app_users: TableDefinition<
+        AppUser,
+        {
+          id?: string;
+          name: string;
+          slug: string;
+          role?: "admin" | "user" | string | null;
+          active?: boolean | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        },
+        Partial<Omit<AppUser, "id" | "created_at">>
       >;
       planning_weeks: TableDefinition<
         PlanningWeek,

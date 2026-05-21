@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-const ADMIN_COOKIE_NAME = "zacx_admin_session";
+import { ADMIN_COOKIE_NAME, APP_USER_COOKIE_NAME } from "@/lib/auth/session-cookie";
 
 export async function POST() {
   const response = NextResponse.json({
@@ -9,6 +9,13 @@ export async function POST() {
   });
 
   response.cookies.set(ADMIN_COOKIE_NAME, "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 0,
+  });
+  response.cookies.set(APP_USER_COOKIE_NAME, "", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

@@ -21,6 +21,8 @@ import { ClientAvatarDisplay } from "@/components/clients/client-detail";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { canEditSettings, canSeeClient, isAdminUser } from "@/lib/auth/types";
+import { useCurrentUser } from "@/lib/auth/current-user";
 import { optimizeImage } from "@/lib/image-optimizer";
 import { extractEndDisplayDate, planningEndStatus } from "@/lib/planning-end-status";
 import { supabase } from "@/lib/supabase/client";
@@ -31,6 +33,8 @@ type DashboardClient = {
   name: string;
   logo_url: string | null;
   primary_color: string | null;
+  assigned_user_id?: string | null;
+  assigned_user_name?: string | null;
   responsible_name: string | null;
   archived_at: string | null;
   deleted_at: string | null;
@@ -222,6 +226,9 @@ function metricCard(label: string, value: number | string, description: string, 
 }
 
 export function AdminDashboard() {
+  const { user: currentUser, loading: userLoading } = useCurrentUser();
+  const isAdmin = isAdminUser(currentUser);
+  const settingsEditable = canEditSettings(currentUser);
   const [data, setData] = useState<DashboardData>({
     clients: [],
     copyPlannings: [],
@@ -243,6 +250,11 @@ export function AdminDashboard() {
   const [error, setError] = useState<string | null>(null);
 
   async function loadMetrics() {
+    if (!currentUser) {
+      if (!userLoading) setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -250,7 +262,7 @@ export function AdminDashboard() {
       await Promise.all([
         supabase
           .from("clients")
-          .select("id, name, logo_url, primary_color, responsible_name, archived_at, deleted_at, created_at")
+          .select("id, name, logo_url, primary_color, assigned_user_id, assigned_user_name, responsible_name, archived_at, deleted_at, created_at")
           .is("deleted_at", null)
           .order("name", { ascending: true }),
         supabase
@@ -274,7 +286,7 @@ export function AdminDashboard() {
       setError(firstError.message);
     } else {
       setData({
-        clients: (clients.data ?? []) as DashboardClient[],
+        clients: ((clients.data ?? []) as DashboardClient[]).filter((client) => canSeeClient(currentUser, client)),
         copyPlannings: (copyPlannings.data ?? []) as DashboardDeliverable[],
         visualPresentations: (visualPresentations.data ?? []) as DashboardDeliverable[],
         visualItems: (visualItems.data ?? []) as DashboardVisualItem[],
@@ -287,7 +299,16 @@ export function AdminDashboard() {
 
   useEffect(() => {
     loadMetrics();
-  }, []);
+  }, [currentUser?.id, userLoading]);
+
+  useEffect(() => {
+    if (!currentUser || isAdmin) return;
+
+    setFilters((current) => ({
+      ...current,
+      responsible: currentUser.name === "Matheus" ? "Matheus" : "Rafael",
+    }));
+  }, [currentUser, isAdmin]);
 
   const maps = useMemo(() => {
     const clientsById = new Map(data.clients.map((client) => [client.id, client]));
@@ -422,6 +443,8 @@ export function AdminDashboard() {
   }, [data.copyPlannings, maps.clientsById]);
 
   async function updateClientResponsible(clientId: string, responsibleName: string) {
+    if (!settingsEditable) return;
+
     setSavingResponsibleId(clientId);
     setError(null);
 
@@ -447,6 +470,8 @@ export function AdminDashboard() {
   }
 
   async function updateClientName(clientId: string, nextName: string) {
+    if (!settingsEditable) return;
+
     const cleanName = nextName.trim();
     const currentClient = data.clients.find((client) => client.id === clientId);
 
@@ -477,6 +502,8 @@ export function AdminDashboard() {
   }
 
   async function uploadClientLogo(client: DashboardClient, file: File) {
+    if (!settingsEditable) return;
+
     if (!isImageFile(file)) {
       setError("Selecione uma imagem valida.");
       return;
@@ -653,13 +680,15 @@ export function AdminDashboard() {
               }
               className={compactSelectClass}
             >
-              <option value="all">Todos responsáveis</option>
-              {responsibleOptions.map((responsible) => (
-                <option key={responsible} value={responsible}>
-                  {responsible}
-                </option>
-              ))}
-              <option value="none">Sem responsável</option>
+              {isAdmin ? <option value="all">Todos responsáveis</option> : null}
+              {responsibleOptions
+                .filter((responsible) => isAdmin || responsible === currentUser?.name)
+                .map((responsible) => (
+                  <option key={responsible} value={responsible}>
+                    {responsible}
+                  </option>
+                ))}
+              {isAdmin ? <option value="none">Sem responsável</option> : null}
             </select>
             <select
               value={filters.status}
@@ -764,6 +793,13 @@ export function AdminDashboard() {
         </TabsContent>
 
         <TabsContent value="configuracoes" className="space-y-5">
+          {!settingsEditable ? (
+            <Card className="border-amber-500/30 bg-amber-500/10 shadow-none">
+              <CardContent className="p-4 text-sm text-amber-600 dark:text-amber-200">
+                Somente ADM pode editar estas configurações.
+              </CardContent>
+            </Card>
+          ) : null}
           <div className="grid gap-4 lg:grid-cols-3">
             {responsibleGroups.map((group) => (
               <Card key={group.label} className="bg-background shadow-none">
@@ -786,7 +822,7 @@ export function AdminDashboard() {
                 <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
                   <div className="flex min-w-0 flex-1 items-center gap-3">
                     <label
-                      className="group relative block shrink-0 cursor-pointer"
+                      className={cn("group relative block shrink-0", settingsEditable ? "cursor-pointer" : "cursor-default")}
                       aria-label={`Trocar foto de ${client.name}`}
                       title="Trocar foto"
                     >
@@ -794,6 +830,7 @@ export function AdminDashboard() {
                         type="file"
                         accept="image/*"
                         className="sr-only"
+                        disabled={!settingsEditable}
                         onChange={(event) => {
                           const file = event.target.files?.[0];
                           event.currentTarget.value = "";
@@ -817,7 +854,7 @@ export function AdminDashboard() {
                     <div className="min-w-0">
                       <input
                         defaultValue={client.name}
-                        disabled={savingClientNameId === client.id}
+                        disabled={!settingsEditable || savingClientNameId === client.id}
                         onBlur={(event) => updateClientName(client.id, event.target.value)}
                         onKeyDown={(event) => {
                           if (event.key === "Enter") {
@@ -839,7 +876,7 @@ export function AdminDashboard() {
                   <select
                     value={client.responsible_name || ""}
                     onChange={(event) => updateClientResponsible(client.id, event.target.value)}
-                    disabled={savingResponsibleId === client.id}
+                    disabled={!settingsEditable || savingResponsibleId === client.id}
                     className={cn(compactSelectClass, "w-full sm:w-48")}
                   >
                     <option value="">Sem responsável</option>

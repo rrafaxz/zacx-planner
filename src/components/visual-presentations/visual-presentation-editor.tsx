@@ -52,6 +52,8 @@ import {
 } from "@/components/visual-presentations/visual-presentation-weeks";
 import { useTheme } from "@/components/theme/theme-provider";
 import { formatDateInput, getDayMonthInputError } from "@/lib/date-mask";
+import { canSeeClient } from "@/lib/auth/types";
+import { useCurrentUser } from "@/lib/auth/current-user";
 import { optimizeImage } from "@/lib/image-optimizer";
 import { supabase } from "@/lib/supabase/client";
 import type { Client, VisualItemImage, VisualPresentation } from "@/lib/supabase/types";
@@ -774,6 +776,7 @@ function mapImagesToItems(items: VisualItemWithImages[], images: VisualItemImage
 }
 
 export function VisualPresentationEditor({ presentationId }: VisualPresentationEditorProps) {
+  const { user: currentUser, loading: userLoading } = useCurrentUser();
   const [presentation, setPresentation] = useState<VisualPresentation | null>(null);
   const [client, setClient] = useState<Client | null>(null);
   const [items, setItems] = useState<VisualItemWithImages[]>([]);
@@ -810,6 +813,7 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
   const [visualConfirmAction, setVisualConfirmAction] = useState<VisualConfirmAction>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [accessDenied, setAccessDenied] = useState(false);
   const itemsUndoStackRef = useRef<VisualItemWithImages[][]>([]);
   const isRestoringUndoRef = useRef(false);
   const itemsRef = useRef<VisualItemWithImages[]>([]);
@@ -980,8 +984,14 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
   }
 
   async function loadPresentation() {
+    if (!currentUser) {
+      if (!userLoading) setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
+    setAccessDenied(false);
 
     const { data: presentationData, error: presentationError } = await supabase
       .from("visual_presentations")
@@ -1010,6 +1020,15 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
 
     if (firstError) {
       setError(firstError.message);
+      setLoading(false);
+      return;
+    }
+
+    if (clientResult.data && !canSeeClient(currentUser, clientResult.data)) {
+      setPresentation(null);
+      setClient(null);
+      setItems([]);
+      setAccessDenied(true);
       setLoading(false);
       return;
     }
@@ -1058,7 +1077,7 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
     setOrigin(window.location.origin);
     itemsUndoStackRef.current = [];
     loadPresentation();
-  }, [presentationId]);
+  }, [presentationId, currentUser?.id, userLoading]);
 
   function cloneItemsSnapshot(sourceItems: VisualItemWithImages[]) {
     return sourceItems.map((item) => ({
@@ -2612,7 +2631,7 @@ export function VisualPresentationEditor({ presentationId }: VisualPresentationE
     return (
       <Card className={surfaceClass}>
         <CardContent className={cn("pt-5 text-sm", mutedTextClass)}>
-          {error || "Apresentacao nao encontrada."}
+          {accessDenied ? "Você não tem acesso a este cliente." : error || "Apresentacao nao encontrada."}
         </CardContent>
       </Card>
     );

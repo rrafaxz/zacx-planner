@@ -26,6 +26,7 @@ type PlanningVisualBoardProps = {
   clientColor?: string | null;
   clientSecondaryColor?: string | null;
   editable?: boolean;
+  allowScheduleEdit?: boolean;
   onSectionsChange?: (
     sections: PlanningVisualSections,
     changedSection: PlanningVisualSectionKey,
@@ -280,6 +281,7 @@ export function PlanningVisualBoard({
   clientColor,
   clientSecondaryColor,
   editable = false,
+  allowScheduleEdit = true,
   onSectionsChange,
   className,
 }: PlanningVisualBoardProps) {
@@ -374,7 +376,14 @@ export function PlanningVisualBoard({
     setItemError(null);
 
     try {
-      const nextSections = updatePlanningVisualItemInSections(sections, selectedItem, draft);
+      const safeDraft = allowScheduleEdit
+        ? draft
+        : {
+            ...draft,
+            date: selectedItem.displayDate || selectedItem.date || draft.date,
+            weekday: selectedItem.weekday || draft.weekday,
+          };
+      const nextSections = updatePlanningVisualItemInSections(sections, selectedItem, safeDraft);
       await onSectionsChange(nextSections, selectedItem.sourceSection as PlanningVisualSectionKey);
       const refreshedItem = parsePlanningSections(nextSections).find(
         (item) =>
@@ -527,7 +536,7 @@ export function PlanningVisualBoard({
                 </div>
               ) : null}
 
-              {isEditing && draft ? (
+              {isEditing && draft && allowScheduleEdit ? (
                 <VisualDetailBlock label="Dados do card" accentColor={selectedColors.detail}>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="grid gap-1.5 text-xs font-medium uppercase text-muted-foreground">

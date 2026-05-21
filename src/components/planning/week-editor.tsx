@@ -21,6 +21,8 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDateInput, isValidDayMonth } from "@/lib/date-mask";
+import { canSeeClient } from "@/lib/auth/types";
+import { useCurrentUser } from "@/lib/auth/current-user";
 import { supabase } from "@/lib/supabase/client";
 import type { Client, ContentItem, PlanningWeek, PresentationItem } from "@/lib/supabase/types";
 import { cn, periodLabel } from "@/lib/utils";
@@ -216,6 +218,7 @@ function storagePathFromPublicUrl(publicUrl?: string | null) {
 }
 
 export function WeekEditor({ weekId }: WeekEditorProps) {
+  const { user: currentUser, loading: userLoading } = useCurrentUser();
   const [week, setWeek] = useState<PlanningWeek | null>(null);
   const [client, setClient] = useState<Client | null>(null);
   const [contentItems, setContentItems] = useState<ContentItem[]>([]);
@@ -237,10 +240,17 @@ export function WeekEditor({ weekId }: WeekEditorProps) {
   const [notice, setNotice] = useState<string | null>(null);
   const [fileInputKey, setFileInputKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [accessDenied, setAccessDenied] = useState(false);
 
   async function loadWeek() {
+    if (!currentUser) {
+      if (!userLoading) setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
+    setAccessDenied(false);
 
     const { data: weekData, error: weekError } = await supabase
       .from("planning_weeks")
@@ -276,6 +286,16 @@ export function WeekEditor({ weekId }: WeekEditorProps) {
     if (firstError) {
       setError(firstError.message);
     } else {
+      if (clientResult.data && !canSeeClient(currentUser, clientResult.data)) {
+        setWeek(null);
+        setClient(null);
+        setContentItems([]);
+        setPresentationItems([]);
+        setAccessDenied(true);
+        setLoading(false);
+        return;
+      }
+
       setWeek(weekData);
       setClient(clientResult.data);
       setContentItems(contentResult.data ?? []);
@@ -288,7 +308,7 @@ export function WeekEditor({ weekId }: WeekEditorProps) {
   useEffect(() => {
     setOrigin(window.location.origin);
     loadWeek();
-  }, [weekId]);
+  }, [weekId, currentUser?.id, userLoading]);
 
   async function handleCreateContent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -510,7 +530,7 @@ export function WeekEditor({ weekId }: WeekEditorProps) {
         </Button>
         <Card className="bg-[#17171A]">
           <CardContent className="pt-5 text-sm text-muted-foreground">
-            {error || "Semana nao encontrada."}
+            {accessDenied ? "Você não tem acesso a este cliente." : error || "Semana nao encontrada."}
           </CardContent>
         </Card>
       </section>

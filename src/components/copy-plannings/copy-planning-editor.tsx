@@ -24,6 +24,8 @@ import type {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { canSeeClient } from "@/lib/auth/types";
+import { useCurrentUser } from "@/lib/auth/current-user";
 import { optimizeImage } from "@/lib/image-optimizer";
 import { supabase } from "@/lib/supabase/client";
 import type { Client, CopyPlanning } from "@/lib/supabase/types";
@@ -66,6 +68,7 @@ function normalizeSectionsForSave(sections: CopyDocumentSections, clientName?: s
 }
 
 export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
+  const { user: currentUser, loading: userLoading } = useCurrentUser();
   const [planning, setPlanning] = useState<CopyPlanning | null>(null);
   const [client, setClient] = useState<Client | null>(null);
   const [sections, setSections] = useState<CopyDocumentSections>({ ...emptyCopySections });
@@ -81,12 +84,19 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
   const [copied, setCopied] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [accessDenied, setAccessDenied] = useState(false);
   const initialLoadCompleteRef = useRef(false);
   const lastSavedSectionsRef = useRef<CopyDocumentSections>({ ...emptyCopySections });
 
   async function loadPlanning() {
+    if (!currentUser) {
+      if (!userLoading) setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
+    setAccessDenied(false);
 
     const { data: planningData, error: planningError } = await supabase
       .from("copy_plannings")
@@ -110,6 +120,14 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
     if (clientError) {
       setError(clientError.message);
     } else {
+      if (clientData && !canSeeClient(currentUser, clientData)) {
+        setPlanning(null);
+        setClient(null);
+        setAccessDenied(true);
+        setLoading(false);
+        return;
+      }
+
       const planningWithSections = planningData as CopyPlanningWithSectionFields;
       const legacySections = parseCopyDocumentContent(planningWithSections.document_content);
 
@@ -137,7 +155,7 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
   useEffect(() => {
     setOrigin(window.location.origin);
     loadPlanning();
-  }, [planningId]);
+  }, [planningId, currentUser?.id, userLoading]);
 
   useEffect(() => {
     if (!confirmArchiveOpen || typeof window === "undefined") {
@@ -385,7 +403,7 @@ export function CopyPlanningEditor({ planningId }: CopyPlanningEditorProps) {
         </Button>
         <Card>
           <CardContent className="pt-5 text-sm text-muted-foreground">
-            {error || "Planejamento nao encontrado."}
+            {accessDenied ? "Você não tem acesso a este cliente." : error || "Planejamento nao encontrado."}
           </CardContent>
         </Card>
       </section>

@@ -21,6 +21,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { canSeeClient, isAdminUser, responsibleNameForUser } from "@/lib/auth/types";
+import { useCurrentUser } from "@/lib/auth/current-user";
 import { optimizeImage } from "@/lib/image-optimizer";
 import { planningEndStatus } from "@/lib/planning-end-status";
 import { supabase } from "@/lib/supabase/client";
@@ -214,6 +216,8 @@ function InlineSearchControl({
 }
 
 export function ClientsManager() {
+  const { user: currentUser, loading: userLoading } = useCurrentUser();
+  const isAdmin = isAdminUser(currentUser);
   const [clients, setClients] = useState<Client[]>([]);
   const [form, setForm] = useState(initialForm);
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -238,6 +242,11 @@ export function ClientsManager() {
   const [endingPlanningAlerts, setEndingPlanningAlerts] = useState<Record<string, EndingPlanningAlert>>({});
 
   async function loadClients() {
+    if (!currentUser) {
+      if (!userLoading) setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -250,7 +259,7 @@ export function ClientsManager() {
     if (requestError) {
       setError(requestError.message);
     } else {
-      setClients(data ?? []);
+      setClients(((data ?? []) as Client[]).filter((client) => canSeeClient(currentUser, client)));
     }
 
     setLoading(false);
@@ -346,7 +355,7 @@ export function ClientsManager() {
 
   useEffect(() => {
     loadClients();
-  }, []);
+  }, [currentUser?.id, userLoading]);
 
   useEffect(() => {
     return () => {
@@ -372,8 +381,8 @@ export function ClientsManager() {
       ),
     ).sort((left, right) => left.localeCompare(right, "pt-BR"));
 
-    return [...defaultResponsibleOptions, ...futureResponsibleNames];
-  }, [clients]);
+    return isAdmin ? [...defaultResponsibleOptions, ...futureResponsibleNames] : [responsibleNameForUser(currentUser)].filter(Boolean);
+  }, [clients, currentUser, isAdmin]);
   const filteredClients = useMemo(() => {
     const search = normalizedSearch(clientSearch);
 
@@ -417,7 +426,10 @@ export function ClientsManager() {
   }, [responsibleFilter, showArchivedClients]);
 
   function openModal() {
-    setForm(initialForm);
+    setForm({
+      ...initialForm,
+      responsibleName: isAdmin ? "" : responsibleNameForUser(currentUser),
+    });
     setLogoFile(null);
     setLogoPreviewUrl(null);
     setError(null);
@@ -492,13 +504,16 @@ export function ClientsManager() {
     try {
       const slug = generatedSlug;
       const logoUrl = await uploadLogo(slug);
+      const responsibleName = isAdmin ? form.responsibleName : responsibleNameForUser(currentUser);
       const { error: requestError } = await supabase.from("clients").insert({
         name: form.name.trim(),
         slug,
         logo_url: logoUrl,
         primary_color: form.primaryColor || "#E5E7EB",
         secondary_color: form.secondaryColor || form.primaryColor || "#E5E7EB",
-        responsible_name: form.responsibleName || null,
+        responsible_name: responsibleName || null,
+        assigned_user_id: !isAdmin && currentUser ? currentUser.id : null,
+        assigned_user_name: responsibleName || null,
       } as never);
 
       if (requestError) {
@@ -759,31 +774,39 @@ export function ClientsManager() {
 
       <div className="space-y-4">
         <div className="no-scrollbar flex max-w-full flex-nowrap items-center gap-2 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible md:pb-0">
-          <button
-            type="button"
-            onClick={() => setResponsibleFilter("all")}
-            className={cn(
-              "h-9 shrink-0 rounded-md border border-border bg-secondary/45 px-3 text-xs font-medium text-muted-foreground transition-colors hover:border-neutral-300 hover:bg-secondary hover:text-foreground sm:h-10 sm:px-4 sm:text-sm",
-              responsibleFilter === "all" &&
-                "border-neutral-300 bg-neutral-200/70 text-foreground dark:border-white/15 dark:bg-white/[0.10] dark:text-foreground",
-            )}
-          >
-            Todos
-          </button>
-          {clientResponsibleOptions.map((responsible) => (
-            <button
-              key={responsible}
-              type="button"
-              onClick={() => setResponsibleFilter(responsible)}
-              className={cn(
-                "h-9 shrink-0 rounded-md border border-border bg-secondary/45 px-3 text-xs font-medium text-muted-foreground transition-colors hover:border-neutral-300 hover:bg-secondary hover:text-foreground sm:h-10 sm:px-4 sm:text-sm",
-                responsibleFilter === responsible &&
-                  "border-neutral-300 bg-neutral-200/70 text-foreground dark:border-white/15 dark:bg-white/[0.10] dark:text-foreground",
-              )}
-            >
-              {responsible}
-            </button>
-          ))}
+          {isAdmin ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setResponsibleFilter("all")}
+                className={cn(
+                  "h-9 shrink-0 rounded-md border border-border bg-secondary/45 px-3 text-xs font-medium text-muted-foreground transition-colors hover:border-neutral-300 hover:bg-secondary hover:text-foreground sm:h-10 sm:px-4 sm:text-sm",
+                  responsibleFilter === "all" &&
+                    "border-neutral-300 bg-neutral-200/70 text-foreground dark:border-white/15 dark:bg-white/[0.10] dark:text-foreground",
+                )}
+              >
+                Todos
+              </button>
+              {clientResponsibleOptions.map((responsible) => (
+                <button
+                  key={responsible}
+                  type="button"
+                  onClick={() => setResponsibleFilter(responsible)}
+                  className={cn(
+                    "h-9 shrink-0 rounded-md border border-border bg-secondary/45 px-3 text-xs font-medium text-muted-foreground transition-colors hover:border-neutral-300 hover:bg-secondary hover:text-foreground sm:h-10 sm:px-4 sm:text-sm",
+                    responsibleFilter === responsible &&
+                      "border-neutral-300 bg-neutral-200/70 text-foreground dark:border-white/15 dark:bg-white/[0.10] dark:text-foreground",
+                  )}
+                >
+                  {responsible}
+                </button>
+              ))}
+            </>
+          ) : (
+            <span className="h-9 shrink-0 rounded-md border border-neutral-300 bg-neutral-200/70 px-3 py-2 text-xs font-medium text-foreground dark:border-white/15 dark:bg-white/[0.10] sm:h-10 sm:px-4 sm:text-sm">
+              {responsibleNameForUser(currentUser) || "Meus clientes"}
+            </span>
+          )}
         </div>
 
         <div className="min-w-0 space-y-4">
@@ -962,9 +985,10 @@ export function ClientsManager() {
                   onChange={(event) =>
                     setForm((current) => ({ ...current, responsibleName: event.target.value }))
                   }
+                  disabled={!isAdmin}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground transition-colors focus-visible:outline-none focus-visible:ring-0 focus-visible:border-neutral-400 dark:focus-visible:border-white/35"
                 >
-                  <option value="">Sem responsável</option>
+                  {isAdmin ? <option value="">Sem responsável</option> : null}
                   {clientResponsibleOptions.map((responsible) => (
                     <option key={responsible} value={responsible}>
                       {responsible}

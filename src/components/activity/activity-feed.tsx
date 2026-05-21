@@ -7,6 +7,8 @@ import { Check, Clipboard, ExternalLink, ImagePlus, Search, X } from "lucide-rea
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { canSeeClient } from "@/lib/auth/types";
+import { useCurrentUser } from "@/lib/auth/current-user";
 import { supabase } from "@/lib/supabase/client";
 import { cn, formatDateBR } from "@/lib/utils";
 
@@ -29,6 +31,9 @@ type FeedItem = {
 type FeedClient = {
   id: string;
   name: string;
+  assigned_user_id?: string | null;
+  assigned_user_name?: string | null;
+  responsible_name?: string | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -98,6 +103,7 @@ function monthLabel(value?: string | null) {
 }
 
 export function ActivityFeed() {
+  const { user: currentUser, loading: userLoading } = useCurrentUser();
   const [items, setItems] = useState<FeedItem[]>([]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FeedFilter>("all");
@@ -112,11 +118,16 @@ export function ActivityFeed() {
 
   useEffect(() => {
     async function loadFeed() {
+      if (!currentUser) {
+        if (!userLoading) setLoading(false);
+        return;
+      }
+
       setLoading(true);
       setError(null);
 
       const [clientsResult, planningsResult, presentationsResult, thumbnailResult] = await Promise.all([
-        supabase.from("clients").select("id, name, created_at, updated_at").is("deleted_at", null),
+        supabase.from("clients").select("id, name, assigned_user_id, assigned_user_name, responsible_name, created_at, updated_at").is("deleted_at", null),
         supabase
           .from("copy_plannings")
           .select("id, client_id, title, public_slug, period_label, start_display_date, document_content, created_at, updated_at, archived_at, deleted_at")
@@ -139,7 +150,7 @@ export function ActivityFeed() {
         return;
       }
 
-      const clients = (clientsResult.data ?? []) as FeedClient[];
+      const clients = ((clientsResult.data ?? []) as FeedClient[]).filter((client) => canSeeClient(currentUser, client));
       const clientsById = new Map(clients.map((client) => [client.id, client]));
       const plannings = (planningsResult.data ?? []) as FeedDeliverable[];
       const presentations = (presentationsResult.data ?? []) as FeedDeliverable[];
@@ -159,7 +170,7 @@ export function ActivityFeed() {
         }, {});
 
       const nextItems: FeedItem[] = [
-        ...plannings.map((planning) => ({
+        ...plannings.filter((planning) => Boolean(planning.client_id && clientsById.has(planning.client_id))).map((planning) => ({
           id: planning.id,
           type: "plannings" as const,
           title: planning.title || "Planejamento",
@@ -171,7 +182,7 @@ export function ActivityFeed() {
           startDisplayDate: planning.start_display_date,
           previewText: extractPreviewText(planning.document_content),
         })),
-        ...presentations.map((presentation) => ({
+        ...presentations.filter((presentation) => Boolean(presentation.client_id && clientsById.has(presentation.client_id))).map((presentation) => ({
           id: presentation.id,
           type: "presentations" as const,
           title: presentation.title || "Apresentação",
@@ -194,7 +205,7 @@ export function ActivityFeed() {
     }
 
     loadFeed();
-  }, []);
+  }, [currentUser, userLoading]);
 
   const visibleItems = useMemo(() => {
     const query = normalizedSearch(search);

@@ -215,6 +215,7 @@ export function PublicCopyPlanningView({ slug }: PublicCopyPlanningViewProps) {
               clientColor={client?.primary_color}
               clientSecondaryColor={client?.secondary_color}
               editable
+              allowScheduleEdit={false}
               onSectionsChange={savePublicVisualSections}
             />
           </TabsContent>
